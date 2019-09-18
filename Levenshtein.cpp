@@ -278,9 +278,30 @@ const char * get_edit_path2(const char *str1, const char *str2){
 }
 
 
-const char * get_edit_path3(const char *str1, const char *str2){
+const char * get_edit_path3(const char *str1, const char *str2, int &dis){
     vector<unsigned int> vec1; Utf8ToUnicode32(str1, vec1);
     vector<unsigned int> vec2; Utf8ToUnicode32(str2, vec2);
+
+    if(vec1.size() == 0){
+        dis = vec2.size(); string res_path = "";
+        for(unsigned int j = 0; j < vec2.size(); j++){
+            if(res_path.size() != 0) res_path += '\n';
+            char str_j[26]; sprintf(str_j, "%d", j + 1);
+            res_path.append(string("0") + '-' + string(str_j) + '-' + "3");
+        }
+        return res_path.c_str();
+    }
+
+    if(vec2.size() == 0){
+        dis = vec1.size(); string res_path = "";
+        for(unsigned int i = 0; i < vec1.size(); i++){
+            if(res_path.size() != 0) res_path += '\n';
+            char str_i[26]; sprintf(str_i, "%d", i + 1);
+            res_path.append(string(str_i) + '-' + string("0") + '-' + "2");
+        }
+        return res_path.c_str();
+    }
+
     unsigned int **dp = (unsigned int **)malloc((vec1.size() + 1) * sizeof(unsigned int *));
     Node **path = (Node **)malloc((vec1.size() + 1) * sizeof(Node *));
     for(unsigned int i = 0; i < vec1.size() + 1; i++){
@@ -335,6 +356,7 @@ const char * get_edit_path3(const char *str1, const char *str2){
         res_path.append(*it);
     }
     //cout<<str1<<"\n"<<str2<<"\n"<<dp[vec1.size()][vec2.size()]<<"\n"<<res_path<<endl<<endl;
+    dis = dp[vec1.size()][vec2.size()];
     char str_dis[26]; sprintf(str_dis, "%d", dp[vec1.size()][vec2.size()]);
     for(unsigned int i = 0; i < vec1.size() + 1; i++){
         free(dp[i]); dp[i] = NULL;
@@ -424,6 +446,14 @@ int get_edit_dis4(const char *str1, const char *str2){
 
 
 int main(){
+    int dis;
+    cout<<get_edit_path3("f", "ff", dis)<<endl;
+    cout<<dis<<endl;
+    cout<<get_edit_path3("f", "", dis)<<endl;
+    cout<<dis<<endl;
+    cout<<get_edit_path3("", "ff", dis)<<endl;
+    cout<<dis<<endl;
+    /*
     int test_num = 100000;
 
     unsigned len_1 = 300 + 1;
@@ -471,4 +501,5 @@ int main(){
     cout<<get_edit_path3("fads", "fadss")<<endl;
     cout<<get_edit_path3("fads", "uads")<<endl;
     return 0;
+    */
 }

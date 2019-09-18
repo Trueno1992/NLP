@@ -165,9 +165,31 @@ static const char * get_edit_path_fast(const char *str1, const char *str2){
 }
 
 
-const char * get_edit_path(const char *str1, const char *str2){
+const char * get_edit_path(const char *str1, const char *str2, int &edit_path){
     vector<unsigned int> vec1; Utf8ToUnicode32(str1, vec1);
     vector<unsigned int> vec2; Utf8ToUnicode32(str2, vec2);
+
+    if(vec1.size() == 0){
+        edit_path = vec2.size(); string res_path = "";
+        for(unsigned int j = 0; j < vec2.size(); j++){
+            if(res_path.size() != 0) res_path += '\n';
+            char str_j[26]; sprintf(str_j, "%d", j + 1);
+            res_path.append(string("0") + '-' + string(str_j) + '-' + "3");
+        }
+        return res_path.c_str();
+    }
+
+    if(vec2.size() == 0){
+        edit_path = vec1.size(); string res_path = "";
+        for(unsigned int i = 0; i < vec1.size(); i++){
+            if(res_path.size() != 0) res_path += '\n';
+            char str_i[26]; sprintf(str_i, "%d", i + 1);
+            res_path.append(string(str_i) + '-' + string("0") + '-' + "2");
+        }
+        return res_path.c_str();
+    }
+
+
     unsigned int **dp = (unsigned int **)malloc((vec1.size() + 1) * sizeof(unsigned int *));
     Node **path = (Node **)malloc((vec1.size() + 1) * sizeof(Node *));
     for(unsigned int i = 0; i < vec1.size() + 1; i++){
@@ -222,14 +244,12 @@ const char * get_edit_path(const char *str1, const char *str2){
         res_path.append(*it);
     }
     //cout<<str1<<"\n"<<str2<<"\n"<<dp[vec1.size()][vec2.size()]<<"\n"<<res_path<<endl<<endl;
-    char str_dis[26]; sprintf(str_dis, "%d", dp[vec1.size()][vec2.size()]);
+    edit_path = dp[vec1.size()][vec2.size()];
     for(unsigned int i = 0; i < vec1.size() + 1; i++){
-        free(dp[i]); dp[i] = NULL;
-        free(path[i]); path[i] = NULL;
+        free(dp[i]); dp[i] = NULL; free(path[i]); path[i] = NULL;
     }
-    free(dp); dp=NULL;
-    free(path); path=NULL;
-    return (string(str_dis) + '\n' + res_path).c_str();
+    free(dp); dp=NULL; free(path); path=NULL;
+    return res_path.c_str();
 }
 
 
@@ -270,11 +290,12 @@ PyObject* wrap_edit_dis(PyObject* self, PyObject* args){
     return Py_BuildValue("i", dis);
 }
 
+
 PyObject* wrap_edit_path(PyObject* self, PyObject* args){
-    char *str1, *str2;
+    char *str1, *str2; int dis;
     if (!PyArg_ParseTuple(args, "ss", &str1, &str2)) return NULL;
-    const char *path = get_edit_path(str1, str2);
-    return Py_BuildValue("s", path);
+    const char *path = get_edit_path(str1, str2, dis);
+    return Py_BuildValue("is", dis, path);
 }
 
 
@@ -308,5 +329,8 @@ PyMODINIT_FUNC initLD(void) {
 
 
 int main(){
+    int dis;
+    cout<<get_edit_path("发的尽快是", "放假啊上看到", dis)<<endl;
+    cout<<dis<<endl;
     return 0;
 }
