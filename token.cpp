@@ -4,7 +4,8 @@
 # include<string.h>
 # include<map>
 # include<vector>
-#include<stdint.h>
+# include<stdint.h>
+# include"Python.h"
 using namespace std;
 
 
@@ -114,6 +115,46 @@ struct Nodes{
 };
 
 
+bool is_node_end(Next *p){
+    Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
+    if(p->type == 0){
+        pn = (Nodes *)p->next;
+        return pn->is_end;
+    }else if (p->type == 1){
+        p1 = (Node_1 *)p->next;
+        return p1->is_end;
+    }else if (p->type == 3){
+        p3 = (Node_3 *)p->next;
+        return p3->is_end;
+    }else if (p->type == 6){
+        p6 = (Node_6 *)p->next;
+        return p6->is_end;
+    }else{
+        throw("p->type is not in (0, 1, 3, 6)");
+    }
+}
+
+
+void update_node_end(Next *p, bool is_end){
+    Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
+    if(p->type == 0){
+        pn = (Nodes *)p->next;
+        pn->is_end = is_end;
+    }else if (p->type == 1){
+        p1 = (Node_1 *)p->next;
+        p1->is_end = is_end;
+    }else if (p->type == 3){
+        p3 = (Node_3 *)p->next;
+        p3->is_end = is_end;
+    }else if (p->type == 6){
+        p6 = (Node_6 *)p->next;
+        p6->is_end = is_end;
+    }else{
+        throw("p->type is not in (0, 1, 3, 6)");
+    }
+}
+
+
 bool insert(Next* root, const char* content){
     int dep = 0; Next* p = root; Next** parent = &root;
 
@@ -144,7 +185,7 @@ bool insert(Next* root, const char* content){
                 tmp_next->next = tmp_node;
                 tmp_next->type = 1;
 
-                (*pn->next_map)[*it] = tmp_next;
+                (*(pn->next_map))[*it] = tmp_next;
 
                 parent = &tmp_next;
                 p = tmp_next;
@@ -306,9 +347,9 @@ bool insert(Next* root, const char* content){
                     tt_next->type = 1;
 
                     for(unsigned int i = 0; i < 6; i++){
-                        (*new_node->next_map)[p6->words[i]] = p6->nexts[i];
+                        (*(new_node->next_map))[p6->words[i]] = p6->nexts[i];
                     }
-                    (*new_node->next_map)[*it] = tt_next;
+                    (*(new_node->next_map))[*it] = tt_next;
 
                     (*parent)->next = new_node;
                     (*parent)->type = 0;
@@ -323,20 +364,67 @@ bool insert(Next* root, const char* content){
         }
         //printf("%d, %d, %d\n", dep, (*parent)->type, *it);
     }
-    if(p->type == 0){
-        pn = (Nodes *)p->next;
-        pn->is_end=true;
-    }else if (p->type == 1){
-        p1 = (Node_1 *)p->next;
-        p1->is_end=true;
-    }else if (p->type == 3){
-        p3 = (Node_3 *)p->next;
-        p3->is_end=true;
-    }else if (p->type == 6){
-        p6 = (Node_6 *)p->next;
-        p6->is_end=true;
-    }
+    update_node_end(p, true);
     return true;
+}
+
+
+bool remove(Next* root, const char* content){
+    Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
+
+    vector<uint32_t> candidate_words;
+    if(!Utf8ToUnicode32(content, candidate_words)) return false;
+
+    map<uint32_t, Next *>::iterator ik; Next* p= root;
+    for(vector<uint32_t>::iterator it = candidate_words.begin(); it != candidate_words.end(); it++){
+        if(p->type == 0){
+           pn = (Nodes *)p->next;
+            if(pn->next_map != NULL){
+                ik = pn->next_map->find(*it);
+                if(ik != pn->next_map->end()){
+                    p = ik->second;
+                }else{
+                    return false;
+                }
+            }else{
+                return false;
+            }
+        }else if(p->type == 1){
+            p1 = (Node_1 *)p->next;
+            if(p1->next != NULL && p1->word == *it){
+                p = p1->next;
+            }else{
+                return false;
+            }
+        }else if(p->type == 3){
+            p3 = (Node_3 *)p->next;
+            bool find = false;
+            for(int i = 0; i < 3; i++){
+                if(p3->nexts[i] != NULL && p3->words[i] == *it){
+                    p = p3->nexts[i];
+                    find = true;
+                    break;
+                }
+            }
+            if(!find) return false;
+        }else if(p->type == 6){
+            p6 = (Node_6 *)p->next;
+            bool find = false;
+            for(int i = 0; i < 6; i++){
+                if(p6->nexts[i] != NULL && p6->words[i] == *it){
+                    p = p6->nexts[i];
+                    find = true;
+                    break;
+                }
+            }
+            if(!find) return false;
+        }else{
+            throw("p->type not in (0, 1, 3, 6)");
+        }
+    }
+    bool res = is_node_end(p);
+    update_node_end(p, false);
+    return res;
 }
 
 
@@ -344,26 +432,6 @@ struct Info{
     string phrase;
     uint32_t position;
 };
-
-
-bool is_node_end(Next *p){
-    Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
-    if(p->type == 0){
-        pn = (Nodes *)p->next;
-        return pn->is_end;
-    }else if (p->type == 1){
-        p1 = (Node_1 *)p->next;
-        return p1->is_end;
-    }else if (p->type == 3){
-        p3 = (Node_3 *)p->next;
-        return p3->is_end;
-    }else if (p->type == 6){
-        p6 = (Node_6 *)p->next;
-        return p6->is_end;
-    }else{
-        throw("p->type is not in (0, 1, 3, 6)");
-    }
-}
 
 
 /*
@@ -469,12 +537,13 @@ void cut_all(Next* root, const char* content, vector<Info *>& res_list){
 void free_tree(Next* p){
     Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
 
+    //printf("%d, kk-----\n", p->type);
     if(p->type == 0){
-        pn = (Nodes *)p->next;
+       pn = (Nodes *)p->next;
         if(pn->next_map != NULL){
             for(map<uint32_t, Next *>::iterator it=pn->next_map->begin(); it != pn->next_map->end(); it++){
                 //string str = ""; uint32_t tmp=it->first; Unicode32ToUtf8(tmp, str);
-                //printf("%d, %s-----\n", p->type, str.c_str());
+                //printf("%d, %s---%d-\n", p->type, str.c_str(), pn->next_map->size());
                 free_tree(it->second);
                 free(it->second);
                 it->second = NULL;
@@ -483,6 +552,7 @@ void free_tree(Next* p){
         pn->next_map->clear();
         delete pn->next_map;
         pn->next_map = NULL;
+        free(pn);
         return;
     }
 
@@ -495,6 +565,7 @@ void free_tree(Next* p){
             free(p1->next);
             p1->next = NULL;
         }
+        free(p1);
         return;
     }
 
@@ -509,6 +580,7 @@ void free_tree(Next* p){
                 p3->nexts[i] = NULL;
             }
         }
+        free(p3);
         return;
     }
 
@@ -523,17 +595,78 @@ void free_tree(Next* p){
                 p6->nexts[i] = NULL;
             }
         }
+        free(p6);
         return;
     }
-    throw("p->type not in (0, 1, 3, 6)");
+    throw("free tree, p->type not in (0, 1, 3, 6)");
 }
 
 
+Next * get_root(){
+    Next *root = (Next *)malloc(sizeof(Next));
+    Node_1 * tmp_node = (Node_1 *)malloc(sizeof(Node_1));
+    tmp_node->word = 0;
+    tmp_node->next = NULL;
+    tmp_node->is_end = false;
+    root->next = tmp_node;
+    root->type = 1;
+    return root;
+}
+
+PyObject* wrap_insert(PyObject* self, PyObject* args){
+    void *p;
+    Next *root;
+    char *content;
+    if (!PyArg_ParseTuple(args, "sp", &p, &content)) return NULL;
+    root = (Next *)p;
+    bool res = insert(root, content);
+    return Py_BuildValue("b", res);
+}
+
+/*
+
+PyObject* wrap_remove(PyObject* self, PyObject* args){
+    char *str1, *str2; int dis;
+    if (!PyArg_ParseTuple(args, "ss", &str1, &str2)) return NULL;
+    string path = get_edit_path(str1, str2, dis);
+    return Py_BuildValue("is", dis, path.c_str());
+}
+
+PyObject* wrap_free(PyObject* self, PyObject* args){
+    char *str1, *str2; int dis;
+    if (!PyArg_ParseTuple(args, "ss", &str1, &str2)) return NULL;
+    string path = get_edit_path(str1, str2, dis);
+    return Py_BuildValue("is", dis, path.c_str());
+}
+
+
+PyObject* wrap_get_root(PyObject* self, PyObject* args){
+    char *str1, *str2; int dis;
+    if (!PyArg_ParseTuple(args, "ss", &str1, &str2)) return NULL;
+    string path = get_edit_path(str1, str2, dis);
+    return Py_BuildValue("is", dis, path.c_str());
+}
+
+
+static PyMethodDef treeMethods[] = {
+        {"insert", wrap_insert, METH_VARARGS, "doc: wrap_remove"},
+        {"remove", wrap_remove, METH_VARARGS, "doc: wrap_remove"},
+        {"free", wrap_free, METH_VARARGS, "doc: wrap_free"},
+        {"get_root", wrap_get_root, METH_VARARGS, "doc: get_root"},
+        {NULL, NULL, 0, NULL}
+};
+
+
+PyMODINIT_FUNC initLD(void) {
+        (void) Py_InitModule("LD", treeMethods);
+}
+*/
+
+
 int main(){
+
     while(true){
-        Next *root = (Next *)malloc(sizeof(Next));
-        root->next = (Node_1 *)malloc(sizeof(Node_1));
-        root->type = 1;
+        Next *root = get_root();
         cout<<insert(root, "121")<<endl;
         cout<<insert(root, "122")<<endl;
         cout<<insert(root, "123")<<endl;
@@ -565,11 +698,29 @@ int main(){
         cout<<insert(root, "8")<<endl;
 
         vector<Info *> res_list;
-        cut_all(root, "11", res_list);
-        for(uint32_t j = 0; j < res_list.size(); j++)
+        res_list.clear();
+        cut_all(root, "121", res_list);
+        for(uint32_t j = 0; j < res_list.size(); j++){
             printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
-        //free_tree(root);
-        root = NULL;
+            delete res_list[j];
+        }
+
+        cout<<remove(root, "129")<<endl;
+        cout<<remove(root, "121")<<endl;
+        cout<<remove(root, "523")<<endl;
+        cout<<remove(root, "81")<<endl;
+        cout<<remove(root, "8")<<endl;
+        cout<<remove(root, "0")<<endl;
+
+        res_list.clear();
+        cut_all(root, "121", res_list);
+        for(uint32_t j = 0; j < res_list.size(); j++){
+            printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
+            delete res_list[j];
+        }
+        free_tree(root);
+        free(root);
+        //root = NULL;
     }
     /*
     Next *p;
