@@ -5,7 +5,7 @@
 # include<map>
 # include<vector>
 # include<stdint.h>
-# include"Python.h"
+//# include"Python.h"
 using namespace std;
 
 
@@ -613,6 +613,38 @@ Next * get_root(){
     return root;
 }
 
+extern "C"{
+    void * get_root_prx(){
+        void *p = get_root();
+        return p;
+    }
+    bool insert_prx(void* p, const char* content){
+        Next* root = (Next *)p;
+        return insert(root, content);
+    }
+    void cutall_prx(void* p, const char *content){
+        Next* root = (Next *)p;
+
+        vector<Info *> res_list; res_list.clear();
+        cut_all(root, content, res_list);
+        for(uint32_t j = 0; j < res_list.size(); j++){
+            printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
+            delete res_list[j];
+        }
+        return;
+    }
+    bool remove_prx(void* p, const char *content){
+        Next* root = (Next *)p;
+        return remove(root, content);
+    }
+    bool free_root_prx(void* p){
+        Next* root = (Next *)p;
+        free_tree(root);
+        free(root);
+    }
+}
+
+/*
 PyObject* wrap_insert(PyObject* self, PyObject* args){
     void *p;
     Next *root;
@@ -623,7 +655,6 @@ PyObject* wrap_insert(PyObject* self, PyObject* args){
     return Py_BuildValue("b", res);
 }
 
-/*
 
 PyObject* wrap_remove(PyObject* self, PyObject* args){
     char *str1, *str2; int dis;
