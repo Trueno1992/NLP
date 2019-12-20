@@ -1,13 +1,48 @@
 # include<iostream>
-# include<stdio.h>
-# include<stdlib.h>
+//# include<stdio.h>
+//# include<stdlib.h>
 # include<string.h>
 # include<map>
 # include<vector>
-# include<stdint.h>
-//# include"Python.h"
+//# include<stdint.h>
+# include"Python.h"
 using namespace std;
 
+/*
+PyObject* PyList_New(int size)
+{
+    PyListObject *op;
+    size_t nbytes;
+
+
+    nbytes = size * sizeof(PyObject *);
+    // Check for overflow 
+    if (nbytes / sizeof(PyObject *) != (size_t)size)
+        return PyErr_NoMemory();
+
+    //为PyListObject申请空间
+    if (num_free_lists) {
+        //使用缓冲池
+        num_free_lists--;
+        op = free_lists[num_free_lists];
+        _Py_NewReference((PyObject *)op);
+    } else {
+        //缓冲池中没有可用的对象，创建对象
+        op = PyObject_GC_New(PyListObject, &PyList_Type);
+    }
+    //为PyListObject对象中维护的元素列表申请空间
+    if (size <= 0)
+        op->ob_item = NULL;
+    else {
+        op->ob_item = (PyObject **) PyMem_MALLOC(nbytes);
+        memset(op->ob_item, 0, nbytes);
+    }
+    op->ob_size = size;
+    op->allocated = size;
+    _PyObject_GC_TRACK(op);
+    return (PyObject *) op;
+}
+*/
 
 bool Utf8ToUnicode32(const string& str, vector<uint32_t>& vec) {
   uint32_t tmp; vec.clear();
@@ -613,35 +648,45 @@ Next * get_root(){
     return root;
 }
 
-extern "C"{
-    void * get_root_prx(){
-        void *p = get_root();
-        return p;
-    }
-    bool insert_prx(void* p, const char* content){
-        Next* root = (Next *)p;
-        return insert(root, content);
-    }
-    void cutall_prx(void* p, const char *content){
-        Next* root = (Next *)p;
+extern "C" void * get_root_prx(){
+    void *p = get_root();
+    return p;
+}
 
-        vector<Info *> res_list; res_list.clear();
-        cut_all(root, content, res_list);
-        for(uint32_t j = 0; j < res_list.size(); j++){
-            printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
-            delete res_list[j];
-        }
-        return;
+extern "C" bool insert_prx(void* p, const char* content){
+    Next* root = (Next *)p;
+    return insert(root, content);
+}
+
+extern "C" bool remove_prx(void* p, const char *content){
+    Next* root = (Next *)p;
+    return remove(root, content);
+}
+
+extern "C" bool free_root_prx(void* p){
+    Next* root = (Next *)p;
+    free_tree(root);
+    free(root);
+}
+
+extern "C" PyObject * cutall_prx(void* p, const char *content){
+    Next* root = (Next *)p;
+    vector<Info *> res_list; res_list.clear();
+    cut_all(root, content, res_list);
+
+    PyObject *oplist = PyList_New(res_list.size());
+    for(uint32_t j = 0; j < res_list.size(); j++){
+        PyObject* pTuple = PyTuple_New(2);
+        assert(PyTuple_Check(pTuple));
+        assert(PyTuple_Size(pTuple) == 2);
+        PyTuple_SetItem(pTuple, 0, Py_BuildValue("s", res_list[j]->phrase.c_str()));
+        PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->position));
+        //PyList_Append(oplist, pTuple);
+        PyList_SetItem(oplist, j, pTuple);
+        //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
+        delete res_list[j];
     }
-    bool remove_prx(void* p, const char *content){
-        Next* root = (Next *)p;
-        return remove(root, content);
-    }
-    bool free_root_prx(void* p){
-        Next* root = (Next *)p;
-        free_tree(root);
-        free(root);
-    }
+    return oplist;
 }
 
 /*
