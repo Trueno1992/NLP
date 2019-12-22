@@ -15,6 +15,24 @@ from functools import wraps
 from ctypes import c_char_p, c_int, c_longlong
 
 
+BRACKETS_START = set(u'(（【[〖《')
+BRACKETS_END = set(u')）】]〗》')
+def remove_brackets_info(content):
+    """ 去掉括号里面的内容: cc（abd）dd -> ccdd
+                            cc(ab(d))kk -> cckk
+    """
+    content = to_unicode(content)
+    tmp, bracket_in = "", 0
+    for c in content:
+        if c in BRACKETS_START:
+            bracket_in += 1
+        if bracket_in == 0:
+            tmp += c
+        if c in BRACKETS_END:
+            bracket_in = max(0, bracket_in - 1)
+    return tmp
+
+
 def is_english(cha):
     """ 判断一个字符是否英文
     """
@@ -183,6 +201,10 @@ def to_unicode(data):
     elif isinstance(data, dict):
         for key, val in data.items():
             data[to_unicode(key)] = to_unicode(val)
+    elif isinstance(data, int):
+        data = str(data)
+    elif isinstance(data, float):
+        data = str(data)
     return data
 
 
@@ -264,7 +286,7 @@ def time_cal(function):
         result = function(*args, **kwargs)
         t1 = time.time()
         logging.info('[Function: {name} finished, spent time: {time:.2f}s]'.format(name = function.__name__,time = t1 - t0))
-        print '[Function: {name} finished, spent time: {time:.2f}s]'.format(name = function.__name__,time = t1 - t0)
+        #print '[Function: {name} finished, spent time: {time:.2f}s]'.format(name = function.__name__,time = t1 - t0)
         return result
     return function_timer
 
@@ -301,7 +323,7 @@ def send_wechat(p_account, interval_seconds=1, ext_msg=""):
                 if ttime - time_cache.get(key, 0) > interval_seconds:
                     ip = os.popen("ifconfig | grep 'inet addr:' | grep -v '127.0.0.1' | cut -d: -f2 | awk '{print $1}' | head -1").read().replace('\n', '')
                     now_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    info_msg = '__module__=%s\nip=%s\nfunc=%s\nnow_time=%s\next_msg=%s\n' % (func.__module__, ip, func.__name__, now_time, ext_msg)
+                    info_msg = 'time=%s\n__module__=%s\nip=%s\nfunc=%s\next_msg=%s\n' % (now_time, func.__module__, ip, func.__name__, ext_msg)
                     info_msg += ',args=%s, kwargs=%s' % (args, kwargs)
                     send_wechat_warning(p_account, info_msg + ("errmsg=%s\n" % str(e)) + ("traceback=%s" % traceback.format_exc()))
                     time_cache[key] = time.time()
@@ -415,16 +437,18 @@ clib.mod_prx.restype=c_longlong
 get_cbin_long=clib.get_bin_long_prx
 cmod=clib.mod_prx
 
+
+#print remove_brackets_info("aabb(fds)ccdd")
 #print str2int('16K+')
 #print str2int('16K')
 #print str2int('16W')
 #print str2int('16W+')
 
 
-@time_cal
-@send_wechat("p_lzhouwu", 30)
-def test(a, b):
-    return a / b
+#@time_cal
+#@send_wechat("p_lzhouwu", 30)
+#def test(a, b):
+#    return a / b
 
 #print my_align('我的绝色总裁未婚妻', 25, True)
 #print my_align('老婆大人，余生请多多指教', 25, True)

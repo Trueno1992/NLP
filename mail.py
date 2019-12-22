@@ -58,7 +58,6 @@ def send_mail(subject, content, receivers, cc_receivers=None, is_content_html=Fa
     logging.info('mail is send ok')
 
 
-
 if __name__ == '__main__':
     send_mail('python 邮件测试',
               '<p color=red>内容是乱起八糟啦</p>',
