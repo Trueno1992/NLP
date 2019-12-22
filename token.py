@@ -95,35 +95,54 @@ class Tree(object):
 
 
 if __name__ == '__main__':
-    root = Tree()
-    print 'insert 2', root.insert('2')
-    print 'insert 1', root.insert('1')
-    print 'insert 9', root.insert('9')
-    print 'insert 12', root.insert('9')
-    print 'insert 23', root.insert('23')
-    print 'insert 24', root.insert('24')
-    print 'insert 25', root.insert('25')
-    print 'insert 14', root.insert('14')
-    print 'insert 123', root.insert('123')
-    print 'insert 124', root.insert('124')
-    print 'insert 吴浪舟', root.insert('吴浪舟')
-    print 'insert 吴浪', root.insert('吴浪')
+    idx = 0;
+    while True:
+        root = Tree()
+        #print 'insert 2',
+        root.insert('2')
+        #print 'insert 1',
+        root.insert('1')
+        #print 'insert 9',
+        root.insert('9')
+        #print 'insert 12',
+        root.insert('9')
+        #print 'insert 23',
+        root.insert('23')
+        #print 'insert 24',
+        root.insert('24')
+        #print 'insert 25',
+        root.insert('25')
+        #print 'insert 14',
+        root.insert('14')
+        #print 'insert 123',
+        root.insert('123')
+        #print 'insert 124',
+        root.insert('124')
+        #print 'insert 吴浪舟',
+        root.insert('吴浪舟')
+        #print 'insert 吴浪',
+        root.insert('吴浪')
 
-    phrse_position_list = root.cut_all('12323242')
-    for phrase, position in phrse_position_list:
-        print 'cut_all, 12323242', phrase, position
-    print ''
+        phrse_position_list = root.cut_all('12323242')
+        for phrase, position in phrse_position_list:
+            print 'cut_all, 12323242', phrase, position
+        print ''
 
-    phrse_position_list = root.get_prefix('123456')
-    for phrase in phrse_position_list:
-        print 'prefix 123456', phrase
-    print ''
+        """
+        phrse_position_list = root.get_prefix('123456')
+        for phrase in phrse_position_list:
+            print 'prefix 123456', phrase
+        print ''
 
-    phrse_position_list = root.get_suffix('吴')
-    for phrase in phrse_position_list:
-        print 'sufix 吴', phrase
-    print ''
+        phrse_position_list = root.get_suffix('吴')
+        for phrase in phrse_position_list:
+            print 'sufix 吴', phrase
+        print ''
 
-    print 'exist 123', root.is_exist('123')
-    print 'exist 125', root.is_exist('125')
-    print 'exist 1', root.is_exist('1')
+        print 'exist 123', root.is_exist('123')
+        print 'exist 125', root.is_exist('125')
+        print 'exist 1', root.is_exist('1')
+        """
+        root.free_root()
+        print 'idx=%s' % idx 
+        idx += 1
