@@ -1,11 +1,11 @@
 # include<iostream>
-//# include<stdio.h>
-//# include<stdlib.h>
+# include<stdio.h>
+# include<stdlib.h>
 # include<string.h>
 # include<map>
 # include<vector>
-//# include<stdint.h>
-# include"Python.h"
+# include<stdint.h>
+//# include"Python.h"
 using namespace std;
 
 /*
@@ -117,6 +117,12 @@ void Unicode32ToUtf8(const uint32_t &ui, string& res) {
 }
 
 
+struct OInfo{
+    const void *p;
+    uint8_t type;
+};
+
+
 struct Next{
     void *next;
     uint8_t type;
@@ -127,6 +133,7 @@ struct Node_1{
     bool is_end;
     uint32_t word;
     Next *next;
+    OInfo *oinfo;
 };
 
 
@@ -134,6 +141,7 @@ struct Node_3{
     bool is_end;
     uint32_t words[3];
     Next *nexts[3];
+    OInfo *oinfo;
 };
 
 
@@ -141,16 +149,18 @@ struct Node_6{
     bool is_end;
     uint32_t words[6];
     Next *nexts[6];
+    OInfo *oinfo;
 };
 
 
 struct Nodes{
     bool is_end;
     map<uint32_t, Next *> *next_map;
+    OInfo *oinfo;
 };
 
 
-bool is_node_end(Next *p){
+bool get_node_end(Next *p){
     Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
     if(p->type == 0){
         pn = (Nodes *)p->next;
@@ -168,8 +178,24 @@ bool is_node_end(Next *p){
         throw("p->type is not in (0, 1, 3, 6)");
     }
 }
-
-
+const OInfo * get_node_oinfo(Next *p){
+    Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
+    if(p->type == 0){
+        pn = (Nodes *)p->next;
+        return pn->oinfo;
+    }else if (p->type == 1){
+        p1 = (Node_1 *)p->next;
+        return p1->oinfo;
+    }else if (p->type == 3){
+        p3 = (Node_3 *)p->next;
+        return p3->oinfo;
+    }else if (p->type == 6){
+        p6 = (Node_6 *)p->next;
+        return p6->oinfo;
+    }else{
+        throw("p->type is not in (0, 1, 3, 6)");
+    }
+}
 void update_node_end(Next *p, bool is_end){
     Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
     if(p->type == 0){
@@ -188,6 +214,36 @@ void update_node_end(Next *p, bool is_end){
         throw("p->type is not in (0, 1, 3, 6)");
     }
 }
+void update_node_info(Next *p, OInfo * oinfo){
+    Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
+    if(p->type == 0){
+        pn = (Nodes *)p->next;
+        free(pn->oinfo);
+        pn->oinfo = oinfo;
+    }else if (p->type == 1){
+        p1 = (Node_1 *)p->next;
+        free(p1->oinfo);
+        p1->oinfo = oinfo;
+    }else if (p->type == 3){
+        p3 = (Node_3 *)p->next;
+        free(p3->oinfo);
+        p3->oinfo = oinfo;
+    }else if (p->type == 6){
+        p6 = (Node_6 *)p->next;
+        free(p6->oinfo);
+        p6->oinfo = oinfo;
+    }else{
+        throw("p->type is not in (0, 1, 3, 6)");
+    }
+}
+
+
+OInfo * get_oinfo(const void *p, uint8_t type){
+    OInfo *oinfo = (OInfo *)malloc(sizeof(OInfo));
+    oinfo->p = p;
+    oinfo->type = type;
+    return oinfo;
+}
 
 
 Node_1 * get_node_1(){
@@ -195,6 +251,7 @@ Node_1 * get_node_1(){
     tmp_node->is_end = false;
     tmp_node->word = 0;
     tmp_node->next = NULL;
+    tmp_node->oinfo = NULL;
     return tmp_node;
 }
 
@@ -206,6 +263,7 @@ Node_3 * get_node_3(){
         new_node->words[i] = 0;
         new_node->nexts[i] = NULL;
     }
+    new_node->oinfo = NULL;
     return new_node;
 }
 
@@ -217,6 +275,7 @@ Node_6 * get_node_6(){
         new_node->words[i] = 0;
         new_node->nexts[i] = NULL;
     }
+    new_node->oinfo = NULL;
     return new_node;
 }
 
@@ -226,11 +285,12 @@ Nodes * get_nodes(){
     new_node->is_end = false;
     new_node->next_map = new map<uint32_t, Next *>;
     new_node->next_map->clear();
+    new_node->oinfo = NULL;
     return new_node;
 }
 
 
-bool insert(Next* root, const char* content){
+bool insert(Next* root, const char* content, OInfo *oinfo){
     int dep = 0; Next* p = root; Next** parent = &root;
     //printf("%d --\n", root->type);
 
@@ -275,6 +335,7 @@ bool insert(Next* root, const char* content){
                     new_node->words[0] = p1->word;
                     new_node->nexts[0] = p1->next;
                     new_node->is_end = p1->is_end;
+                    new_node->oinfo = p1->oinfo;
 
                     new_node->nexts[1] = (Next *)malloc(sizeof(Next));
                     new_node->nexts[1]->next = get_node_1();
@@ -323,6 +384,7 @@ bool insert(Next* root, const char* content){
                         new_node->words[i] = p3->words[i];
                         new_node->nexts[i] = p3->nexts[i];
                         new_node->is_end = p3->is_end;
+                        new_node->oinfo = p3->oinfo;
                     }
                     new_node->nexts[3] = (Next *)malloc(sizeof(Next));
                     new_node->nexts[3]->next = get_node_1();
@@ -388,6 +450,7 @@ bool insert(Next* root, const char* content){
         }
         //printf("%d, %d, %d\n", dep, (*parent)->type, *it);
     }
+    update_node_info(p, oinfo);
     update_node_end(p, true);
     return true;
 }
@@ -446,16 +509,17 @@ bool remove(Next* root, const char* content){
             throw("p->type not in (0, 1, 3, 6)");
         }
     }
-    bool res = is_node_end(p);
+    bool res = get_node_end(p);
+    update_node_info(p, NULL);
     update_node_end(p, false);
     return res;
 }
 
 
-struct Info{
+struct ResInfo{
     string phrase;
     uint32_t position;
-    uint32_t phrase_len;
+    const OInfo *oinfo;
 };
 
 
@@ -465,7 +529,7 @@ return: 从当前位置切分的最长切分位置
 int32_t cut_from(Next* root,
                  vector<uint32_t>:: iterator start,
                  vector<uint32_t>:: iterator end,
-                 vector<Info *> &res_list,
+                 vector<ResInfo *> &res_list,
                  int32_t offset_position=0){
     Next* p = root; Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
     map<uint32_t, Next *>::iterator ik;
@@ -481,11 +545,12 @@ int32_t cut_from(Next* root,
 
             Unicode32ToUtf8(*it, res_str);
             p = ik->second;
-            if(is_node_end(p)){
-                Info *info = new Info();
-                info->phrase = res_str;
-                info->position = offset_position;
-                res_list.push_back(info);
+            if(get_node_end(p)){
+                ResInfo *res_info = new ResInfo();
+                res_info->phrase = res_str;
+                res_info->position = offset_position;
+                res_info->oinfo = get_node_oinfo(p);
+                res_list.push_back(res_info);
                 max_position = max(max_position, offset_position);
             }
             continue;
@@ -496,11 +561,12 @@ int32_t cut_from(Next* root,
 
             Unicode32ToUtf8(*it, res_str);
             p = p1->next;
-            if(is_node_end(p)){
-                Info *info = new Info();
-                info->phrase = res_str;
-                info->position = offset_position;
-                res_list.push_back(info);
+            if(get_node_end(p)){
+                ResInfo *res_info = new ResInfo();
+                res_info->phrase = res_str;
+                res_info->position = offset_position;
+                res_info->oinfo = get_node_oinfo(p);
+                res_list.push_back(res_info);
                 max_position = max(max_position, offset_position);
             }
             continue;
@@ -512,12 +578,12 @@ int32_t cut_from(Next* root,
                 if(p3->words[i] == *it){
                     Unicode32ToUtf8(*it, res_str);
                     p = p3->nexts[i];
-
-                    if(is_node_end(p)){
-                        Info *info = new Info();
-                        info->phrase = res_str.c_str();
-                        info->position = offset_position;
-                        res_list.push_back(info);
+                    if(get_node_end(p)){
+                        ResInfo *res_info = new ResInfo();
+                        res_info->phrase = res_str.c_str();
+                        res_info->position = offset_position;
+                        res_info->oinfo = get_node_oinfo(p);
+                        res_list.push_back(res_info);
                         max_position = max(max_position, offset_position);
                     }
                     find = true;
@@ -534,11 +600,12 @@ int32_t cut_from(Next* root,
                 if(p6->words[i] == *it){
                     Unicode32ToUtf8(*it, res_str);
                     p = p6->nexts[i];
-                    if(is_node_end(p)){
-                        Info *info = new Info();
-                        info->phrase = res_str;
-                        info->position = offset_position;
-                        res_list.push_back(info);
+                    if(get_node_end(p)){
+                        ResInfo *res_info = new ResInfo();
+                        res_info->phrase = res_str;
+                        res_info->position = offset_position;
+                        res_info->oinfo = get_node_oinfo(p);
+                        res_list.push_back(res_info);
                         max_position = max(max_position, offset_position);
                     }
                     find = true;
@@ -552,97 +619,9 @@ int32_t cut_from(Next* root,
     return max_position;
 }
 
-int32_t cut_max(Next* root,
-                vector<uint32_t>:: iterator start,
-                vector<uint32_t>:: iterator end,
-                Info * res_info,
-                int32_t offset_position=0){
-    Next* p = root; Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
-    map<uint32_t, Next *>::iterator ik;
-    string res_str = "";
-    int32_t max_position = -1, str_len = 0;
-    for(vector<uint32_t>:: iterator it = start; it != end; it++, offset_position++){
-        //string str = ""; Unicode32ToUtf8(*it, str);
-        //printf("%s ++\n", str.c_str());
-        if (p->type == 0){
-            pn = (Nodes *)p->next;
-            ik = pn->next_map->find(*it);
-            if(ik == pn->next_map->end())return max_position;
-
-            Unicode32ToUtf8(*it, res_str);
-            p = ik->second;
-            str_len += 1;
-            if(is_node_end(p)){
-                res_info->phrase = res_str;
-                res_info->position = offset_position;
-                res_info->phrase_len = str_len;
-                max_position = max(max_position, offset_position);
-            }
-        }
-        else if (p->type == 1){
-            p1 = (Node_1 *)p->next;
-            if(p1->word != *it)return max_position;
-
-            Unicode32ToUtf8(*it, res_str);
-            p = p1->next;
-            str_len += 1;
-            if(is_node_end(p)){
-                res_info->phrase = res_str;
-                res_info->position = offset_position;
-                res_info->phrase_len = str_len;
-                max_position = max(max_position, offset_position);
-            }
-        }
-        else if (p->type == 3){
-            p3 = (Node_3 *)p->next;
-            bool find = false;
-            for(uint32_t i = 0; i < 3; i++){
-                if(p3->words[i] == *it){
-                    Unicode32ToUtf8(*it, res_str);
-                    p = p3->nexts[i];
-                    str_len += 1;
-
-                    if(is_node_end(p)){
-                        res_info->phrase = res_str.c_str();
-                        res_info->position = offset_position;
-                        res_info->phrase_len = str_len;
-                        max_position = max(max_position, offset_position);
-                    }
-                    find = true;
-                    break;
-                }
-            }
-            if(!find) return max_position;
-        }
-        else if (p->type == 6){
-            p6 = (Node_6 *)p->next;
-            bool find = false;
-            for(uint32_t i = 0; i < 6; i++){
-                if(p6->words[i] == *it){
-                    Unicode32ToUtf8(*it, res_str);
-                    p = p6->nexts[i];
-                    str_len += 1;
-                    if(is_node_end(p)){
-                        Info *info = new Info();
-                        res_info->phrase = res_str;
-                        res_info->position = offset_position;
-                        res_info->phrase_len = str_len;
-                        max_position = max(max_position, offset_position);
-                    }
-                    find = true;
-                    break;
-                }
-            }
-            if(!find) return max_position;
-        }
-    }
-    return max_position;
-}
-
-
 
 void get_tree_suffix_phrases(Next * p, const string &res_str, vector<string> &res_list){
-    if (is_node_end(p)){
+    if (get_node_end(p)){
         res_list.push_back(res_str);
     }
     if (p->type == 0){
@@ -757,10 +736,11 @@ void free_tree(Next* p){
         pn->next_map->clear();
         delete pn->next_map;
         pn->next_map = NULL;
+        free(pn->oinfo);
+        pn->oinfo = NULL;
         free(pn);
         return;
     }
-
     if(p->type == 1){
         p1 = (Node_1 *)p->next;
         if(p1->next != NULL){
@@ -770,10 +750,11 @@ void free_tree(Next* p){
             free(p1->next);
             p1->next = NULL;
         }
+        free(p1->oinfo);
+        p1->oinfo = NULL;
         free(p1);
         return;
     }
-
     if(p->type == 3){
         p3 = (Node_3 *)p->next;
         for(int i = 0; i < 3; i++){
@@ -785,10 +766,11 @@ void free_tree(Next* p){
                 p3->nexts[i] = NULL;
             }
         }
+        free(p3->oinfo);
+        p3->oinfo = NULL;
         free(p3);
         return;
     }
-
     if(p->type == 6){
         p6 = (Node_6 *)p->next;
         for(int i = 0; i < 6; i++){
@@ -800,6 +782,8 @@ void free_tree(Next* p){
                 p6->nexts[i] = NULL;
             }
         }
+        free(p6->oinfo);
+        p6->oinfo = NULL;
         free(p6);
         return;
     }
@@ -809,15 +793,12 @@ void free_tree(Next* p){
 
 Next * get_root(){
     Next *root = (Next *)malloc(sizeof(Next));
-    Node_1 * tmp_node = (Node_1 *)malloc(sizeof(Node_1));
-    tmp_node->word = 0;
-    tmp_node->next = NULL;
-    tmp_node->is_end = false;
+    Node_1 * tmp_node = get_node_1();
     root->next = tmp_node;
     root->type = 1;
     return root;
 }
-void get_content_all(Next* root, const char* content, vector<Info *>& res_list){
+void get_content_all(Next* root, const char* content, vector<ResInfo *>& res_list){
     vector<uint32_t> candidate_words;
     if(!Utf8ToUnicode32(content, candidate_words)) return;
     int32_t position = 0; res_list.clear();
@@ -825,46 +806,23 @@ void get_content_all(Next* root, const char* content, vector<Info *>& res_list){
         cut_from(root, it, candidate_words.end(), res_list, position);
     }
 }
-void cut_content_all(Next* root, const char* content, vector<Info *>& res_list){
+void cut_content_all(Next* root, const char* content, vector<ResInfo *>& res_list){
     vector<uint32_t> candidate_words;
     if(!Utf8ToUnicode32(content, candidate_words)) return;
-    int32_t position = 0, max_position = 0, now_max_position; res_list.clear();
+    int32_t position = 0, max_position = -1, now_max_position; res_list.clear();
     for(vector<uint32_t>:: iterator it = candidate_words.begin(); it != candidate_words.end(); it++, position++){
         now_max_position = cut_from(root, it, candidate_words.end(), res_list, position);
         if(now_max_position == -1 && max_position < position){
-            Info *info = new Info();
-            info->phrase = "";
-            Unicode32ToUtf8(*it, info->phrase);
-            info->position = position;
-            res_list.push_back(info);
+            ResInfo *res_info = new ResInfo();
+            res_info->phrase = "";
+            Unicode32ToUtf8(*it, res_info->phrase);
+            res_info->position = position;
+            res_list.push_back(res_info);
         }
         max_position = max(max_position, max(position, now_max_position));
     }
 }
-void cut_content_max(Next* root, const char* content, vector<Info *>& res_list){
-    vector<uint32_t> candidate_words;
-    if(!Utf8ToUnicode32(content, candidate_words)) return;
-    int32_t position = 0, now_max_position; res_list.clear();
-    vector<uint32_t>:: iterator it = candidate_words.begin();
-    while (it != candidate_words.end()){
-        Info * res_info = new Info();
-        now_max_position = cut_max(root, it, candidate_words.end(), res_info, position);
-        if(now_max_position == -1){
-            res_info->phrase = "";
-            Unicode32ToUtf8(*it, res_info->phrase);
-            res_info->position = position;
-        }else{
-            it += res_info->phrase_len - 1;
-            position = res_info->position; 
-        }
-        res_list.push_back(res_info);
-        it++;
-        position++;
-    }
-}
-
-
-void get_content_prefix_phrases(Next* root, const char* content, vector<Info *>& res_list){
+void get_content_prefix_phrases(Next* root, const char* content, vector<ResInfo *>& res_list){
     vector<uint32_t> candidate_words;
     if(!Utf8ToUnicode32(content, candidate_words)) return;
     if(candidate_words.size() == 0) return;
@@ -879,6 +837,7 @@ void get_content_suffix_phrases(Next* root, const char* content, vector<string> 
     get_tree_suffix_phrases(endp, content, res_list);
 }
 
+/*
 extern "C" void * get_root_prx(){
     void *p = get_root();
     return p;
@@ -888,9 +847,10 @@ extern "C" void free_root_prx(void* p){
     free_tree(root);
     free(root);
 }
-extern "C" bool insert_prx(void* p, const char* content){
+extern "C" bool insert_prx(void* p, const char* content, const PyObject * oinfo){
     Next* root = (Next *)p;
-    return insert(root, content);
+    OInfo* tmp_info = get_oinfo(oinfo, 0);
+    return insert(root, content, tmp_info);
 }
 extern "C" bool remove_prx(void* p, const char *content){
     Next* root = (Next *)p;
@@ -898,26 +858,8 @@ extern "C" bool remove_prx(void* p, const char *content){
 }
 extern "C" PyObject * cutall_prx(void* p, const char *content){
     Next* root = (Next *)p;
-    vector<Info *> res_list; res_list.clear();
+    vector<ResInfo *> res_list; res_list.clear();
     cut_content_all(root, content, res_list);
-
-    PyObject *oplist = PyList_New(res_list.size());
-    for(uint32_t j = 0; j < res_list.size(); j++){
-        PyObject* pTuple = PyTuple_New(2);
-        assert(PyTuple_Check(pTuple));
-        assert(PyTuple_Size(pTuple) == 2);
-        PyTuple_SetItem(pTuple, 0, Py_BuildValue("s", res_list[j]->phrase.c_str()));
-        PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->position));
-        PyList_SetItem(oplist, j, pTuple);
-        //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
-        delete res_list[j];
-    }
-    return oplist;
-}
-extern "C" PyObject * cutmax_prx(void* p, const char *content){
-    Next* root = (Next *)p;
-    vector<Info *> res_list; res_list.clear();
-    cut_content_max(root, content, res_list);
 
     PyObject *oplist = PyList_New(res_list.size());
     for(uint32_t j = 0; j < res_list.size(); j++){
@@ -934,7 +876,7 @@ extern "C" PyObject * cutmax_prx(void* p, const char *content){
 }
 extern "C" PyObject * getall_prx(void* p, const char *content){
     Next* root = (Next *)p;
-    vector<Info *> res_list; res_list.clear();
+    vector<ResInfo *> res_list; res_list.clear();
     get_content_all(root, content, res_list);
 
     PyObject *oplist = PyList_New(res_list.size());
@@ -952,7 +894,7 @@ extern "C" PyObject * getall_prx(void* p, const char *content){
 }
 extern "C" PyObject * get_prefix_phrases_prx(void *p, const char *content){
     Next* root = (Next *)p;
-    vector<Info *> res_list; res_list.clear();
+    vector<ResInfo *> res_list; res_list.clear();
     get_content_prefix_phrases(root, content, res_list);
 
     PyObject *oplist = PyList_New(res_list.size());
@@ -983,8 +925,9 @@ extern "C" bool exist_phrase_prx(void *p, const char* content){
     if(candidate_words.size() == 0) return false;
     Next * endp = get_phrase_endp(root, candidate_words.begin(), candidate_words.end());
     if(endp == NULL) return false;
-    return is_node_end(endp);
+    return get_node_end(endp);
 }
+*/
 
 /*
 PyObject* wrap_insert(PyObject* self, PyObject* args){
@@ -1034,46 +977,46 @@ PyMODINIT_FUNC initLD(void) {
         (void) Py_InitModule("LD", treeMethods);
 }
 */
-// g++ -fPIC token.cpp -I/usr/local/app/service/virtualenvs/NLP/include/python2.7 -shared -o token.so
+// g++ -fPIC token2map.cpp -I/usr/local/app/service/virtualenvs/NLP/include/python2.7 -shared -o token2map.so
 
 int main(){
     while(true){
         Next *root = get_root();
-        cout<<insert(root, "121")<<endl;
-        cout<<insert(root, "122")<<endl;
-        cout<<insert(root, "123")<<endl;
-        cout<<insert(root, "124")<<endl;
-        cout<<insert(root, "125")<<endl;
-        cout<<insert(root, "126")<<endl;
-        cout<<insert(root, "127")<<endl;
-        cout<<insert(root, "128")<<endl;
-        cout<<insert(root, "129")<<endl;
+        cout<<insert(root, "121", NULL)<<endl;
+        cout<<insert(root, "122", NULL)<<endl;
+        cout<<insert(root, "123", NULL)<<endl;
+        cout<<insert(root, "124", NULL)<<endl;
+        cout<<insert(root, "125", NULL)<<endl;
+        cout<<insert(root, "126", NULL)<<endl;
+        cout<<insert(root, "127", NULL)<<endl;
+        cout<<insert(root, "128", NULL)<<endl;
+        cout<<insert(root, "129", NULL)<<endl;
 
-        cout<<insert(root, "133")<<endl;
-        cout<<insert(root, "143")<<endl;
-        cout<<insert(root, "153")<<endl;
-        cout<<insert(root, "163")<<endl;
-        cout<<insert(root, "173")<<endl;
-        cout<<insert(root, "183")<<endl;
+        cout<<insert(root, "133", NULL)<<endl;
+        cout<<insert(root, "143", NULL)<<endl;
+        cout<<insert(root, "153", NULL)<<endl;
+        cout<<insert(root, "163", NULL)<<endl;
+        cout<<insert(root, "173", NULL)<<endl;
+        cout<<insert(root, "183", NULL)<<endl;
 
-        cout<<insert(root, "19")<<endl;
-        cout<<insert(root, "10")<<endl;
-        cout<<insert(root, "223")<<endl;
-        cout<<insert(root, "323")<<endl;
-        cout<<insert(root, "423")<<endl;
-        cout<<insert(root, "523")<<endl;
-        cout<<insert(root, "623")<<endl;
-        cout<<insert(root, "723")<<endl;
-        cout<<insert(root, "823")<<endl;
-        cout<<insert(root, "82")<<endl;
-        cout<<insert(root, "81")<<endl;
-        cout<<insert(root, "8")<<endl;
+        cout<<insert(root, "19", NULL)<<endl;
+        cout<<insert(root, "10", NULL)<<endl;
+        cout<<insert(root, "223", NULL)<<endl;
+        cout<<insert(root, "323", NULL)<<endl;
+        cout<<insert(root, "423", NULL)<<endl;
+        cout<<insert(root, "523", NULL)<<endl;
+        cout<<insert(root, "623", NULL)<<endl;
+        cout<<insert(root, "723", NULL)<<endl;
+        cout<<insert(root, "823", NULL)<<endl;
+        cout<<insert(root, "82", NULL)<<endl;
+        cout<<insert(root, "81", NULL)<<endl;
+        cout<<insert(root, "8", NULL)<<endl;
 
-        vector<Info *> res_list;
+        vector<ResInfo *> res_list;
         res_list.clear();
         cut_content_all(root, "121", res_list);
         for(uint32_t j = 0; j < res_list.size(); j++){
-            printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
+            printf("%s, %d ++++\n", res_list[j]->phrase.c_str(), res_list[j]->position);
             delete res_list[j];
         }
 

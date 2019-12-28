@@ -28,6 +28,9 @@ LID.cutall_prx.restype = py_object
 LID.getall_prx.argtypes = [c_void_p, c_char_p]
 LID.getall_prx.restype = py_object
 
+LID.cutmax_prx.argtypes = [c_void_p, c_char_p]
+LID.cutmax_prx.restype = py_object
+
 LID.get_prefix_phrases_prx.argtypes = [c_void_p, c_char_p]
 LID.get_prefix_phrases_prx.restype = py_object
 
@@ -59,6 +62,13 @@ class Tree(object):
         if not isinstance(content, str):
             content = content.encode('utf8')
         return LID.cutall_prx(self.root, content)
+
+    def cut_max(self, content):
+        """ pass
+        """
+        if not isinstance(content, str):
+            content = content.encode('utf8')
+        return LID.cutmax_prx(self.root, content)
 
     def get_all(self, content):
         """ pass
@@ -122,8 +132,11 @@ if __name__ == '__main__':
         root.insert('吴浪舟')
         #print 'insert 吴浪',
         root.insert('吴浪')
+        root.insert('浪舟')
+        root.insert('舟')
+        root.insert('浪')
 
-        phrse_position_list = root.cut_all('12323242')
+        phrse_position_list = root.cut_max('1吴浪2舟舟浪吴浪2')
         for phrase, position in phrse_position_list:
             print 'cut_all, 12323242', phrase, position
         print ''
@@ -146,3 +159,4 @@ if __name__ == '__main__':
         root.free_root()
         print 'idx=%s' % idx 
         idx += 1
+        break
