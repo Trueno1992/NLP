@@ -9,7 +9,7 @@ import ctypes
 import datetime
 from ctypes import c_char_p, c_int, c_float, c_double, c_bool, c_void_p, py_object
 
-LID = ctypes.CDLL('%s/token.so' % '.')
+LID = ctypes.CDLL('%s/token_lib.so' % '.')
 
 LID.get_root_prx.argtypes = []
 LID.get_root_prx.restype = c_void_p

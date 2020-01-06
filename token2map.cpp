@@ -478,6 +478,7 @@ bool insert(Next* root, const char* content, OInfo *oinfo){
                         (*new_node->next_map)[p6->words[i]] = p6->nexts[i];
                     }
                     (*new_node->next_map)[*it] = tt_next;
+                    new_node->is_end = p6->is_end;
 
                     (*parent)->next = new_node;
                     (*parent)->type = 0;
@@ -1273,8 +1274,8 @@ PyMODINIT_FUNC initLD(void) {
         (void) Py_InitModule("LD", treeMethods);
 }
 */
-// g++ -fPIC token2map.cpp -I/usr/local/app/service/virtualenvs/NLP/include/python2.7 -shared -o token2map.so
 
+// g++ -fPIC token2map.cpp -I/usr/local/app/service/virtualenvs/NLP/include/python2.7 -shared -o token2map_lib.so
 int main(){
     while(true){
         Next *root = get_root();
