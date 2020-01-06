@@ -5,7 +5,7 @@
 # include<map>
 # include<vector>
 # include<stdint.h>
-//# include"Python.h"
+# include"Python.h"
 using namespace std;
 
 /*
@@ -118,8 +118,14 @@ void Unicode32ToUtf8(const uint32_t &ui, string& res) {
 
 
 struct OInfo{
-    const void *p;
-    uint8_t type;
+    void *p;
+    int8_t type;
+    /*
+    OInfo(void *tmp_p, uint8_t tmp_type){
+        p = tmp_p;
+        type = tmp_type;
+    }
+    */
 };
 
 
@@ -214,22 +220,66 @@ void update_node_end(Next *p, bool is_end){
         throw("p->type is not in (0, 1, 3, 6)");
     }
 }
-void update_node_info(Next *p, OInfo * oinfo){
+void update_node_oinfo(Next *p, OInfo * oinfo){
     Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
     if(p->type == 0){
         pn = (Nodes *)p->next;
+        if(pn->oinfo != NULL && pn->oinfo->p != NULL){
+            if(pn->oinfo->type == 0){
+                PyObject *tmp = (PyObject *)pn->oinfo->p;
+                Py_DECREF(tmp);
+                pn->oinfo->p = NULL;
+            }
+            else if(pn->oinfo->type != -1){
+                free(pn->oinfo->p);
+                pn->oinfo->p = NULL;
+            }
+        }
         free(pn->oinfo);
         pn->oinfo = oinfo;
     }else if (p->type == 1){
         p1 = (Node_1 *)p->next;
+        if(p1->oinfo != NULL && p1->oinfo->p != NULL){
+            if(p1->oinfo->type == 0){
+                PyObject *tmp = (PyObject *)p1->oinfo->p;
+                Py_DECREF(tmp);
+                p1->oinfo->p = NULL;
+            }
+            else if(p1->oinfo->type != -1){
+                free(p1->oinfo->p);
+                p1->oinfo->p = NULL;
+            }
+        }
         free(p1->oinfo);
         p1->oinfo = oinfo;
     }else if (p->type == 3){
         p3 = (Node_3 *)p->next;
+        if(p3->oinfo != NULL && p3->oinfo->p != NULL){
+            if(p3->oinfo->type == 0){
+                PyObject *tmp = (PyObject *)p3->oinfo->p;
+                Py_DECREF(tmp);
+                p3->oinfo->p = NULL;
+            }
+            else if(p3->oinfo->type != -1){
+                free(p3->oinfo->p);
+                p3->oinfo->p = NULL;
+            }
+        }
         free(p3->oinfo);
         p3->oinfo = oinfo;
     }else if (p->type == 6){
         p6 = (Node_6 *)p->next;
+        if(p6->oinfo != NULL && p6->oinfo->p != NULL){
+            if(p6->oinfo->type == 0){
+                PyObject *tmp = (PyObject *)p6->oinfo->p;
+                Py_DECREF(tmp);
+                p6->oinfo->p = NULL;
+            }
+            else if(p6->oinfo->type != -1){
+                free(p6->oinfo->p);
+                p6->oinfo->p = NULL;
+            }
+        }
         free(p6->oinfo);
         p6->oinfo = oinfo;
     }else{
@@ -238,14 +288,12 @@ void update_node_info(Next *p, OInfo * oinfo){
 }
 
 
-OInfo * get_oinfo(const void *p, uint8_t type){
+OInfo * get_oinfo(void *p, uint8_t type){
     OInfo *oinfo = (OInfo *)malloc(sizeof(OInfo));
     oinfo->p = p;
     oinfo->type = type;
     return oinfo;
 }
-
-
 Node_1 * get_node_1(){
     Node_1 * tmp_node = (Node_1 *)malloc(sizeof(Node_1));
     tmp_node->is_end = false;
@@ -254,8 +302,6 @@ Node_1 * get_node_1(){
     tmp_node->oinfo = NULL;
     return tmp_node;
 }
-
-
 Node_3 * get_node_3(){
     Node_3 * new_node = (Node_3 *)malloc(sizeof(Node_3));
     new_node->is_end = false;
@@ -266,8 +312,6 @@ Node_3 * get_node_3(){
     new_node->oinfo = NULL;
     return new_node;
 }
-
-
 Node_6 * get_node_6(){
     Node_6 * new_node = (Node_6 *)malloc(sizeof(Node_6));
     new_node->is_end = false;
@@ -278,8 +322,6 @@ Node_6 * get_node_6(){
     new_node->oinfo = NULL;
     return new_node;
 }
-
-
 Nodes * get_nodes(){
     Nodes * new_node = (Nodes *)malloc(sizeof(Nodes));
     new_node->is_end = false;
@@ -450,7 +492,7 @@ bool insert(Next* root, const char* content, OInfo *oinfo){
         }
         //printf("%d, %d, %d\n", dep, (*parent)->type, *it);
     }
-    update_node_info(p, oinfo);
+    update_node_oinfo(p, oinfo);
     update_node_end(p, true);
     return true;
 }
@@ -510,7 +552,7 @@ bool remove(Next* root, const char* content){
         }
     }
     bool res = get_node_end(p);
-    update_node_info(p, NULL);
+    update_node_oinfo(p, NULL);
     update_node_end(p, false);
     return res;
 }
@@ -519,6 +561,7 @@ bool remove(Next* root, const char* content){
 struct ResInfo{
     string phrase;
     uint32_t position;
+    uint32_t phrase_len;
     const OInfo *oinfo;
 };
 
@@ -619,10 +662,105 @@ int32_t cut_from(Next* root,
     return max_position;
 }
 
+/*最大切分*/
+int32_t cut_max(Next* root,
+                vector<uint32_t>:: iterator start,
+                vector<uint32_t>:: iterator end,
+                ResInfo * res_info,
+                int32_t offset_position=0){
+    Next* p = root; Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
+    map<uint32_t, Next *>::iterator ik;
+    string res_str = "";
+    int32_t max_position = -1, str_len = 0;
+    for(vector<uint32_t>:: iterator it = start; it != end; it++, offset_position++){
+        //string str = ""; Unicode32ToUtf8(*it, str);
+        //printf("%s ++\n", str.c_str());
+        if (p->type == 0){
+            pn = (Nodes *)p->next;
+            ik = pn->next_map->find(*it);
+            if(ik == pn->next_map->end())return max_position;
 
-void get_tree_suffix_phrases(Next * p, const string &res_str, vector<string> &res_list){
+            Unicode32ToUtf8(*it, res_str);
+            p = ik->second;
+            str_len += 1;
+            if(get_node_end(p)){
+                res_info->phrase = res_str;
+                res_info->position = offset_position;
+                res_info->phrase_len = str_len;
+                res_info->oinfo = get_node_oinfo(p);
+                max_position = max(max_position, offset_position);
+            }
+        }
+        else if (p->type == 1){
+            p1 = (Node_1 *)p->next;
+            if(p1->word != *it)return max_position;
+
+            Unicode32ToUtf8(*it, res_str);
+            p = p1->next;
+            str_len += 1;
+            if(get_node_end(p)){
+                res_info->phrase = res_str;
+                res_info->position = offset_position;
+                res_info->phrase_len = str_len;
+                res_info->oinfo = get_node_oinfo(p);
+                max_position = max(max_position, offset_position);
+            }
+        }
+        else if (p->type == 3){
+            p3 = (Node_3 *)p->next;
+            bool find = false;
+            for(uint32_t i = 0; i < 3; i++){
+                if(p3->words[i] == *it){
+                    Unicode32ToUtf8(*it, res_str);
+                    p = p3->nexts[i];
+                    str_len += 1;
+
+                    if(get_node_end(p)){
+                        res_info->phrase = res_str.c_str();
+                        res_info->position = offset_position;
+                        res_info->phrase_len = str_len;
+                        res_info->oinfo = get_node_oinfo(p);
+                        max_position = max(max_position, offset_position);
+                    }
+                    find = true;
+                    break;
+                }
+            }
+            if(!find) return max_position;
+        }
+        else if (p->type == 6){
+            p6 = (Node_6 *)p->next;
+            bool find = false;
+            for(uint32_t i = 0; i < 6; i++){
+                if(p6->words[i] == *it){
+                    Unicode32ToUtf8(*it, res_str);
+                    p = p6->nexts[i];
+                    str_len += 1;
+                    if(get_node_end(p)){
+                        res_info->phrase = res_str;
+                        res_info->position = offset_position;
+                        res_info->phrase_len = str_len;
+                        res_info->oinfo = get_node_oinfo(p);
+                        max_position = max(max_position, offset_position);
+                    }
+                    find = true;
+                    break;
+                }
+            }
+            if(!find) return max_position;
+        }
+    }
+    return max_position;
+}
+
+
+void get_tree_suffix_phrases(Next * p, const string &res_str, vector<ResInfo *> &res_list){
     if (get_node_end(p)){
-        res_list.push_back(res_str);
+        ResInfo *res_info = new ResInfo();
+        res_info->phrase = res_str;
+        res_info->position = -1;
+        res_info->oinfo = get_node_oinfo(p);
+        res_list.push_back(res_info);
     }
     if (p->type == 0){
         Nodes* pn = (Nodes *)p->next;
@@ -736,6 +874,16 @@ void free_tree(Next* p){
         pn->next_map->clear();
         delete pn->next_map;
         pn->next_map = NULL;
+        if(pn->oinfo != NULL && pn->oinfo->p != NULL){
+            if(pn->oinfo->type == 0){
+                PyObject * tmp = (PyObject *)pn->oinfo->p;
+                Py_DECREF(tmp);
+                cout<<"111111"<<endl;
+            }else{
+                free(pn->oinfo->p);
+                pn->oinfo->p = NULL;
+            }
+        }
         free(pn->oinfo);
         pn->oinfo = NULL;
         free(pn);
@@ -749,6 +897,16 @@ void free_tree(Next* p){
             free_tree(p1->next);
             free(p1->next);
             p1->next = NULL;
+        }
+        if(p1->oinfo != NULL && p1->oinfo->p != NULL){
+            if(p1->oinfo->type == 0){
+                PyObject * tmp = (PyObject *)p1->oinfo->p;
+                Py_DECREF(tmp);
+                cout<<"2222222"<<endl;
+            }else{
+                free(p1->oinfo->p);
+                p1->oinfo->p = NULL;
+            }
         }
         free(p1->oinfo);
         p1->oinfo = NULL;
@@ -766,6 +924,16 @@ void free_tree(Next* p){
                 p3->nexts[i] = NULL;
             }
         }
+        if(p3->oinfo != NULL && p3->oinfo->p != NULL){
+            if(p3->oinfo->type == 0){
+                PyObject * tmp = (PyObject *)p3->oinfo->p;
+                Py_DECREF(tmp);
+                cout<<"333333"<<endl;
+            }else{
+                free(p3->oinfo->p);
+                p3->oinfo->p = NULL;
+            }
+        }
         free(p3->oinfo);
         p3->oinfo = NULL;
         free(p3);
@@ -780,6 +948,16 @@ void free_tree(Next* p){
                 free_tree(p6->nexts[i]);
                 free(p6->nexts[i]);
                 p6->nexts[i] = NULL;
+            }
+        }
+        if(p6->oinfo != NULL && p6->oinfo->p != NULL){
+            if(p6->oinfo->type == 0){
+                PyObject * tmp = (PyObject *)p6->oinfo->p;
+                Py_DECREF(tmp);
+                cout<<"444444"<<endl;
+            }else{
+                free(p6->oinfo->p);
+                p6->oinfo->p = NULL;
             }
         }
         free(p6->oinfo);
@@ -806,6 +984,7 @@ void get_content_all(Next* root, const char* content, vector<ResInfo *>& res_lis
         cut_from(root, it, candidate_words.end(), res_list, position);
     }
 }
+OInfo global_oinfo = {NULL, -1};
 void cut_content_all(Next* root, const char* content, vector<ResInfo *>& res_list){
     vector<uint32_t> candidate_words;
     if(!Utf8ToUnicode32(content, candidate_words)) return;
@@ -817,9 +996,32 @@ void cut_content_all(Next* root, const char* content, vector<ResInfo *>& res_lis
             res_info->phrase = "";
             Unicode32ToUtf8(*it, res_info->phrase);
             res_info->position = position;
+            res_info->oinfo = NULL;
             res_list.push_back(res_info);
         }
         max_position = max(max_position, max(position, now_max_position));
+    }
+}
+void cut_content_max(Next* root, const char* content, vector<ResInfo *>& res_list){
+    vector<uint32_t> candidate_words;
+    if(!Utf8ToUnicode32(content, candidate_words)) return;
+    int32_t position = 0, now_max_position; res_list.clear();
+    vector<uint32_t>:: iterator it = candidate_words.begin();
+    while (it != candidate_words.end()){
+        ResInfo * res_info = new ResInfo();
+        now_max_position = cut_max(root, it, candidate_words.end(), res_info, position);
+        if(now_max_position == -1){
+            res_info->phrase = "";
+            Unicode32ToUtf8(*it, res_info->phrase);
+            res_info->position = position;
+            res_info->oinfo = NULL;
+        }else{
+            it += res_info->phrase_len - 1;
+            position = res_info->position; 
+        }
+        res_list.push_back(res_info);
+        it++;
+        position++;
     }
 }
 void get_content_prefix_phrases(Next* root, const char* content, vector<ResInfo *>& res_list){
@@ -828,7 +1030,7 @@ void get_content_prefix_phrases(Next* root, const char* content, vector<ResInfo 
     if(candidate_words.size() == 0) return;
     cut_from(root, candidate_words.begin(), candidate_words.end(), res_list, 0);
 }
-void get_content_suffix_phrases(Next* root, const char* content, vector<string> &res_list){
+void get_content_suffix_phrases(Next* root, const char* content, vector<ResInfo *> &res_list){
     vector<uint32_t> candidate_words;
     if(!Utf8ToUnicode32(content, candidate_words)) return;
     if(candidate_words.size() == 0) return;
@@ -837,7 +1039,6 @@ void get_content_suffix_phrases(Next* root, const char* content, vector<string> 
     get_tree_suffix_phrases(endp, content, res_list);
 }
 
-/*
 extern "C" void * get_root_prx(){
     void *p = get_root();
     return p;
@@ -847,7 +1048,8 @@ extern "C" void free_root_prx(void* p){
     free_tree(root);
     free(root);
 }
-extern "C" bool insert_prx(void* p, const char* content, const PyObject * oinfo){
+extern "C" bool insert_prx(void* p, const char* content, PyObject * oinfo){
+    Py_INCREF(oinfo);
     Next* root = (Next *)p;
     OInfo* tmp_info = get_oinfo(oinfo, 0);
     return insert(root, content, tmp_info);
@@ -863,17 +1065,51 @@ extern "C" PyObject * cutall_prx(void* p, const char *content){
 
     PyObject *oplist = PyList_New(res_list.size());
     for(uint32_t j = 0; j < res_list.size(); j++){
-        PyObject* pTuple = PyTuple_New(2);
+        PyObject* pTuple = PyTuple_New(3);
         assert(PyTuple_Check(pTuple));
-        assert(PyTuple_Size(pTuple) == 2);
+        assert(PyTuple_Size(pTuple) == 3);
         PyTuple_SetItem(pTuple, 0, Py_BuildValue("s", res_list[j]->phrase.c_str()));
         PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->position));
+
+        if(res_list[j]->oinfo != NULL && res_list[j]->oinfo->type == 0){
+            Py_INCREF((PyObject *)res_list[j]->oinfo->p);
+            PyTuple_SetItem(pTuple, 2, Py_BuildValue("N", (PyObject *)res_list[j]->oinfo->p));
+        }else if(res_list[j]->oinfo == NULL){
+            Py_INCREF(Py_None);
+            PyTuple_SetItem(pTuple, 2, Py_None);
+        }
         PyList_SetItem(oplist, j, pTuple);
         //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
         delete res_list[j];
     }
     return oplist;
 }
+extern "C" PyObject * cutmax_prx(void* p, const char *content){
+    Next* root = (Next *)p;
+    vector<ResInfo *> res_list; res_list.clear();
+    cut_content_max(root, content, res_list);
+
+    PyObject *oplist = PyList_New(res_list.size());
+    for(uint32_t j = 0; j < res_list.size(); j++){
+        PyObject* pTuple = PyTuple_New(3);
+        assert(PyTuple_Check(pTuple));
+        assert(PyTuple_Size(pTuple) == 3);
+        PyTuple_SetItem(pTuple, 0, Py_BuildValue("s", res_list[j]->phrase.c_str()));
+        PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->position));
+        PyList_SetItem(oplist, j, pTuple);
+        if(res_list[j]->oinfo != NULL && res_list[j]->oinfo->type == 0){
+            Py_INCREF((PyObject *)res_list[j]->oinfo->p);
+            PyTuple_SetItem(pTuple, 2, Py_BuildValue("N", (PyObject *)res_list[j]->oinfo->p));
+        }else if(res_list[j]->oinfo == NULL){
+            Py_INCREF(Py_None);
+            PyTuple_SetItem(pTuple, 2, Py_None);
+        }
+        //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
+        delete res_list[j];
+    }
+    return oplist;
+}
+
 extern "C" PyObject * getall_prx(void* p, const char *content){
     Next* root = (Next *)p;
     vector<ResInfo *> res_list; res_list.clear();
@@ -881,11 +1117,18 @@ extern "C" PyObject * getall_prx(void* p, const char *content){
 
     PyObject *oplist = PyList_New(res_list.size());
     for(uint32_t j = 0; j < res_list.size(); j++){
-        PyObject* pTuple = PyTuple_New(2);
+        PyObject* pTuple = PyTuple_New(3);
         assert(PyTuple_Check(pTuple));
-        assert(PyTuple_Size(pTuple) == 2);
+        assert(PyTuple_Size(pTuple) == 3);
         PyTuple_SetItem(pTuple, 0, Py_BuildValue("s", res_list[j]->phrase.c_str()));
         PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->position));
+        if(res_list[j]->oinfo->type == 0){
+            Py_INCREF((PyObject *)res_list[j]->oinfo->p);
+            PyTuple_SetItem(pTuple, 2, Py_BuildValue("N", (PyObject *)res_list[j]->oinfo->p));
+        }else if(res_list[j]->oinfo->type == -1){
+            Py_INCREF(Py_None);
+            PyTuple_SetItem(pTuple, 2, Py_None);
+        }
         PyList_SetItem(oplist, j, pTuple);
         //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
         delete res_list[j];
@@ -899,7 +1142,19 @@ extern "C" PyObject * get_prefix_phrases_prx(void *p, const char *content){
 
     PyObject *oplist = PyList_New(res_list.size());
     for(uint32_t j = 0; j < res_list.size(); j++){
-        PyList_SetItem(oplist, j, Py_BuildValue("s", res_list[j]->phrase.c_str()));
+        PyObject* pTuple = PyTuple_New(3);
+        assert(PyTuple_Check(pTuple));
+        assert(PyTuple_Size(pTuple) == 3);
+        PyTuple_SetItem(pTuple, 0, Py_BuildValue("s", res_list[j]->phrase.c_str()));
+        PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->position));
+        if(res_list[j]->oinfo->type == 0){
+            Py_INCREF((PyObject *)res_list[j]->oinfo->p);
+            PyTuple_SetItem(pTuple, 2, Py_BuildValue("N", (PyObject *)res_list[j]->oinfo->p));
+        }else if(res_list[j]->oinfo->type == -1){
+            Py_INCREF(Py_None);
+            PyTuple_SetItem(pTuple, 2, Py_None);
+        }
+        PyList_SetItem(oplist, j, pTuple);
         //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
         delete res_list[j];
     }
@@ -907,13 +1162,26 @@ extern "C" PyObject * get_prefix_phrases_prx(void *p, const char *content){
 }
 extern "C" PyObject * get_suffix_phrases_prx(void *p, const char *content){
     Next* root = (Next *)p;
-    vector<string> res_list; res_list.clear();
+    vector<ResInfo *> res_list; res_list.clear();
     get_content_suffix_phrases(root, content, res_list);
 
     PyObject *oplist = PyList_New(res_list.size());
     for(uint32_t j = 0; j < res_list.size(); j++){
-        PyList_SetItem(oplist, j, Py_BuildValue("s", res_list[j].c_str()));
+        PyObject* pTuple = PyTuple_New(3);
+        assert(PyTuple_Check(pTuple));
+        assert(PyTuple_Size(pTuple) == 3);
+        PyTuple_SetItem(pTuple, 0, Py_BuildValue("s", res_list[j]->phrase.c_str()));
+        PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->position));
+        if(res_list[j]->oinfo->type == 0){
+            Py_INCREF((PyObject *)res_list[j]->oinfo->p);
+            PyTuple_SetItem(pTuple, 2, Py_BuildValue("N", (PyObject *)res_list[j]->oinfo->p));
+        }else if(res_list[j]->oinfo->type == -1){
+            Py_INCREF(Py_None);
+            PyTuple_SetItem(pTuple, 2, Py_None);
+        }
+        PyList_SetItem(oplist, j, pTuple);
         //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
+        delete res_list[j];
     }
     res_list.clear();
     return oplist;
@@ -927,7 +1195,35 @@ extern "C" bool exist_phrase_prx(void *p, const char* content){
     if(endp == NULL) return false;
     return get_node_end(endp);
 }
-*/
+extern "C" const PyObject * get_kv_prx(void *p, const char* content){
+    Next* root = (Next *)p;
+    vector<uint32_t> candidate_words;
+    if(!Utf8ToUnicode32(content, candidate_words)){
+        Py_INCREF(Py_None);
+        return Py_None;
+    }
+    if(candidate_words.size() == 0){
+        Py_INCREF(Py_None);
+        return Py_None;
+    }
+    Next * endp = get_phrase_endp(root, candidate_words.begin(), candidate_words.end());
+    if(endp == NULL){
+        Py_INCREF(Py_None);
+        return Py_None;
+    }
+    const OInfo *oinfo = get_node_oinfo(endp);
+    if(oinfo == NULL){
+        Py_INCREF(Py_None);
+        return Py_None;
+    }
+    else if(oinfo->type == 0){
+        Py_INCREF((PyObject *)oinfo->p);
+        return (PyObject *)oinfo->p;
+    }else{
+        throw("oinfo->type not python obj");
+    }
+}
+
 
 /*
 PyObject* wrap_insert(PyObject* self, PyObject* args){
@@ -982,15 +1278,24 @@ PyMODINIT_FUNC initLD(void) {
 int main(){
     while(true){
         Next *root = get_root();
-        cout<<insert(root, "121", NULL)<<endl;
-        cout<<insert(root, "122", NULL)<<endl;
-        cout<<insert(root, "123", NULL)<<endl;
-        cout<<insert(root, "124", NULL)<<endl;
-        cout<<insert(root, "125", NULL)<<endl;
-        cout<<insert(root, "126", NULL)<<endl;
-        cout<<insert(root, "127", NULL)<<endl;
-        cout<<insert(root, "128", NULL)<<endl;
-        cout<<insert(root, "129", NULL)<<endl;
+        OInfo *pp[10];
+        void *tt[10];
+        for(int i = 0; i < 10; i++){
+            pp[i] = (OInfo *)malloc(sizeof(OInfo));
+            tt[i] = get_node_1();
+            pp[i]->p = tt[i];
+            pp[i]->type = 1;
+        }
+        cout<<insert(root, "121", pp[0])<<endl;
+        cout<<insert(root, "122", pp[1])<<endl;
+        cout<<insert(root, "123", pp[2])<<endl;
+        cout<<insert(root, "124", pp[3])<<endl;
+        cout<<insert(root, "124", pp[4])<<endl;
+        cout<<insert(root, "125", pp[5])<<endl;
+        cout<<insert(root, "126", pp[6])<<endl;
+        cout<<insert(root, "127", pp[7])<<endl;
+        cout<<insert(root, "128", pp[8])<<endl;
+        cout<<insert(root, "129", pp[9])<<endl;
 
         cout<<insert(root, "133", NULL)<<endl;
         cout<<insert(root, "143", NULL)<<endl;
@@ -1019,11 +1324,10 @@ int main(){
             printf("%s, %d ++++\n", res_list[j]->phrase.c_str(), res_list[j]->position);
             delete res_list[j];
         }
-
-        cout<<remove(root, "129")<<endl;
         cout<<remove(root, "121")<<endl;
+        cout<<remove(root, "124")<<endl;
         cout<<remove(root, "523")<<endl;
-        cout<<remove(root, "81")<<endl;
+        cout<<remove(root, "129")<<endl;
         cout<<remove(root, "8")<<endl;
         cout<<remove(root, "0")<<endl;
 
@@ -1033,9 +1337,15 @@ int main(){
             printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
             delete res_list[j];
         }
+        cout<<"insert end"<<endl;
         free_tree(root);
         free(root);
-        //root = NULL;
+        root = NULL;
+        for(int i = 0; i < 10; i++){
+            //void * tt = const_cast<void *>(pp[i]->p);
+            free(tt[i]);
+        }
+        cout<<"end"<<endl;
     }
     /*
     Next *p;

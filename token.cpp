@@ -623,7 +623,6 @@ int32_t cut_max(Next* root,
                     p = p6->nexts[i];
                     str_len += 1;
                     if(is_node_end(p)){
-                        Info *info = new Info();
                         res_info->phrase = res_str;
                         res_info->position = offset_position;
                         res_info->phrase_len = str_len;
