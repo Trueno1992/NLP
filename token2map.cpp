@@ -1,3 +1,4 @@
+# include"Python.h"
 # include<iostream>
 # include<stdio.h>
 # include<stdlib.h>
@@ -5,7 +6,7 @@
 # include<map>
 # include<vector>
 # include<stdint.h>
-# include"Python.h"
+
 using namespace std;
 
 /*
@@ -384,6 +385,8 @@ bool insert(Next* root, const char* content, OInfo *oinfo){
                     new_node->nexts[1]->type = 1;
                     new_node->words[1] = *it;
 
+                    new_node->is_end = p1->is_end;
+                    new_node->oinfo = p1->oinfo;
                     (*parent)->next = new_node;
                     (*parent)->type = 3;
                     free(p1);
@@ -433,6 +436,9 @@ bool insert(Next* root, const char* content, OInfo *oinfo){
                     new_node->nexts[3]->type = 1;
                     new_node->words[3] = *it;
 
+                    new_node->is_end = p3->is_end;
+                    new_node->oinfo = p3->oinfo;
+
                     (*parent)->next = new_node;
                     (*parent)->type = 6;
                     free(p3);
@@ -479,6 +485,7 @@ bool insert(Next* root, const char* content, OInfo *oinfo){
                     }
                     (*new_node->next_map)[*it] = tt_next;
                     new_node->is_end = p6->is_end;
+                    new_node->oinfo = p6->oinfo;
 
                     (*parent)->next = new_node;
                     (*parent)->type = 0;
@@ -1045,9 +1052,11 @@ extern "C" void * get_root_prx(){
     return p;
 }
 extern "C" void free_root_prx(void* p){
+    PyGILState_STATE gstate = PyGILState_Ensure();
     Next* root = (Next *)p;
     free_tree(root);
     free(root);
+    PyGILState_Release(gstate);
 }
 extern "C" bool insert_prx(void* p, const char* content, PyObject * oinfo){
     Py_INCREF(oinfo);
@@ -1064,6 +1073,7 @@ extern "C" PyObject * cutall_prx(void* p, const char *content){
     vector<ResInfo *> res_list; res_list.clear();
     cut_content_all(root, content, res_list);
 
+    PyGILState_STATE gstate = PyGILState_Ensure();
     PyObject *oplist = PyList_New(res_list.size());
     for(uint32_t j = 0; j < res_list.size(); j++){
         PyObject* pTuple = PyTuple_New(3);
@@ -1083,6 +1093,7 @@ extern "C" PyObject * cutall_prx(void* p, const char *content){
         //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
         delete res_list[j];
     }
+    PyGILState_Release(gstate);
     return oplist;
 }
 extern "C" PyObject * cutmax_prx(void* p, const char *content){
@@ -1090,6 +1101,7 @@ extern "C" PyObject * cutmax_prx(void* p, const char *content){
     vector<ResInfo *> res_list; res_list.clear();
     cut_content_max(root, content, res_list);
 
+    PyGILState_STATE gstate = PyGILState_Ensure();
     PyObject *oplist = PyList_New(res_list.size());
     for(uint32_t j = 0; j < res_list.size(); j++){
         PyObject* pTuple = PyTuple_New(3);
@@ -1108,6 +1120,7 @@ extern "C" PyObject * cutmax_prx(void* p, const char *content){
         //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
         delete res_list[j];
     }
+    PyGILState_Release(gstate);
     return oplist;
 }
 
@@ -1116,6 +1129,7 @@ extern "C" PyObject * getall_prx(void* p, const char *content){
     vector<ResInfo *> res_list; res_list.clear();
     get_content_all(root, content, res_list);
 
+    PyGILState_STATE gstate = PyGILState_Ensure();
     PyObject *oplist = PyList_New(res_list.size());
     for(uint32_t j = 0; j < res_list.size(); j++){
         PyObject* pTuple = PyTuple_New(3);
@@ -1134,6 +1148,7 @@ extern "C" PyObject * getall_prx(void* p, const char *content){
         //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
         delete res_list[j];
     }
+    PyGILState_Release(gstate);
     return oplist;
 }
 extern "C" PyObject * get_prefix_phrases_prx(void *p, const char *content){
@@ -1141,6 +1156,7 @@ extern "C" PyObject * get_prefix_phrases_prx(void *p, const char *content){
     vector<ResInfo *> res_list; res_list.clear();
     get_content_prefix_phrases(root, content, res_list);
 
+    PyGILState_STATE gstate = PyGILState_Ensure();
     PyObject *oplist = PyList_New(res_list.size());
     for(uint32_t j = 0; j < res_list.size(); j++){
         PyObject* pTuple = PyTuple_New(3);
@@ -1159,6 +1175,7 @@ extern "C" PyObject * get_prefix_phrases_prx(void *p, const char *content){
         //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
         delete res_list[j];
     }
+    PyGILState_Release(gstate);
     return oplist;
 }
 extern "C" PyObject * get_suffix_phrases_prx(void *p, const char *content){
@@ -1166,6 +1183,7 @@ extern "C" PyObject * get_suffix_phrases_prx(void *p, const char *content){
     vector<ResInfo *> res_list; res_list.clear();
     get_content_suffix_phrases(root, content, res_list);
 
+    PyGILState_STATE gstate = PyGILState_Ensure();
     PyObject *oplist = PyList_New(res_list.size());
     for(uint32_t j = 0; j < res_list.size(); j++){
         PyObject* pTuple = PyTuple_New(3);
@@ -1185,6 +1203,7 @@ extern "C" PyObject * get_suffix_phrases_prx(void *p, const char *content){
         delete res_list[j];
     }
     res_list.clear();
+    PyGILState_Release(gstate);
     return oplist;
 }
 extern "C" bool exist_phrase_prx(void *p, const char* content){
@@ -1196,33 +1215,56 @@ extern "C" bool exist_phrase_prx(void *p, const char* content){
     if(endp == NULL) return false;
     return get_node_end(endp);
 }
-extern "C" const PyObject * get_kv_prx(void *p, const char* content){
+extern "C" PyObject * get_kv_prx(void *p, const char* content){
     Next* root = (Next *)p;
     vector<uint32_t> candidate_words;
+
+    PyGILState_STATE gstate = PyGILState_Ensure();
     if(!Utf8ToUnicode32(content, candidate_words)){
         Py_INCREF(Py_None);
+        PyGILState_Release(gstate);
         return Py_None;
     }
     if(candidate_words.size() == 0){
         Py_INCREF(Py_None);
+        PyGILState_Release(gstate);
         return Py_None;
     }
     Next * endp = get_phrase_endp(root, candidate_words.begin(), candidate_words.end());
     if(endp == NULL){
         Py_INCREF(Py_None);
+        PyGILState_Release(gstate);
         return Py_None;
     }
     const OInfo *oinfo = get_node_oinfo(endp);
     if(oinfo == NULL){
         Py_INCREF(Py_None);
+        PyGILState_Release(gstate);
         return Py_None;
     }
     else if(oinfo->type == 0){
         Py_INCREF((PyObject *)oinfo->p);
+        PyGILState_Release(gstate);
         return (PyObject *)oinfo->p;
     }else{
+        PyGILState_Release(gstate);
         throw("oinfo->type not python obj");
     }
+}
+extern "C" PyObject * test(){
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    PyObject *oplist = PyTuple_New(500);
+    for(int32_t j = 0; j < 500; j++){
+        PyObject * pTuple = PyTuple_New(3);
+        assert(PyTuple_Check(pTuple));
+        assert(PyTuple_Size(pTuple) == 3);
+        PyTuple_SetItem(pTuple, 0, Py_BuildValue("s", "b"));
+        PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", 1));
+        PyTuple_SetItem(pTuple, 2, Py_BuildValue("s", "a"));
+        PyTuple_SetItem(oplist, j, pTuple);
+    }
+    PyGILState_Release(gstate);
+    return oplist;
 }
 
 

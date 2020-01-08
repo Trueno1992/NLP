@@ -280,6 +280,7 @@ bool insert(Next* root, const char* content){
                     new_node->nexts[1]->next = get_node_1();
                     new_node->nexts[1]->type = 1;
                     new_node->words[1] = *it;
+                    new_node->is_end = p1->is_end;
 
                     (*parent)->next = new_node;
                     (*parent)->type = 3;
@@ -328,6 +329,7 @@ bool insert(Next* root, const char* content){
                     new_node->nexts[3]->next = get_node_1();
                     new_node->nexts[3]->type = 1;
                     new_node->words[3] = *it;
+                    new_node->is_end = p3->is_end;
 
                     (*parent)->next = new_node;
                     (*parent)->type = 6;

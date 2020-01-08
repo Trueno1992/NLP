@@ -43,6 +43,8 @@ LID.get_kv_prx.restype = py_object
 LID.cutmax_prx.argtypes = [c_void_p, c_char_p]
 LID.cutmax_prx.restype = py_object
 
+LID.test.restype = py_object
+
 
 class Tree(object):
     """ pass
@@ -120,6 +122,11 @@ class Tree(object):
         """
         LID.free_root_prx(self.root)
 
+    def test(self):
+        """ pass
+        """
+        return LID.test()
+
 
 if __name__ == '__main__':
     idx = 0;
@@ -127,6 +134,7 @@ if __name__ == '__main__':
         root = Tree()
         #print 'insert 2',
         root.insert('2', 1)
+        root.test()
 
         #root.remove('2')
         #print root.get_kv('2')
@@ -165,6 +173,8 @@ if __name__ == '__main__':
         root.insert('舟', 12)
         root.insert('浪', 13)
         print 'end insert'
+        print len(root.get_all('吴浪' * 11000))
+        time.sleep(20)
 
         print root.remove('222'), '++'
         print root.remove('浪'), '++'
