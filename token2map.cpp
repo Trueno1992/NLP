@@ -864,6 +864,63 @@ Next * get_phrase_endp(Next* root,
     return p;
 }
 
+Next * get_lc_endp(Next* root,
+                   string &res_str,
+                   vector<uint32_t>:: iterator start,
+                   vector<uint32_t>:: iterator end
+                   ){
+    Next* p = root; Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
+    map<uint32_t, Next *>::iterator ik;
+    for(vector<uint32_t>:: iterator it = start; it != end; it++){
+        //string str = ""; Unicode32ToUtf8(*it, str);
+        //printf("%s ++\n", str.c_str());
+        if (p->type == 0){
+            pn = (Nodes *)p->next;
+            ik = pn->next_map->find(*it);
+            if(ik == pn->next_map->end())return p;
+            Unicode32ToUtf8(*it, res_str);
+            p = ik->second;
+            continue;
+        }
+        if (p->type == 1){
+            p1 = (Node_1 *)p->next;
+            if(p1->word != *it)return p;
+            p = p1->next;
+            Unicode32ToUtf8(*it, res_str);
+            continue;
+        }
+        if (p->type == 3){
+            p3 = (Node_3 *)p->next;
+            bool find = false;
+            for(uint32_t i = 0; i < 3; i++){
+                if(p3->words[i] == *it){
+                    Unicode32ToUtf8(*it, res_str);
+                    p = p3->nexts[i];
+                    find = true;
+                    break;
+                }
+            }
+            if(!find) return p;
+            continue;
+        }
+        if (p->type == 6){
+            p6 = (Node_6 *)p->next;
+            bool find = false;
+            for(uint32_t i = 0; i < 6; i++){
+                if(p6->words[i] == *it){
+                    Unicode32ToUtf8(*it, res_str);
+                    p = p6->nexts[i];
+                    find = true;
+                    break;
+                }
+            }
+            if(!find) return p;
+            continue;
+        }
+    }
+    return p;
+}
+
 
 void free_tree(Next* p){
     Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
@@ -1046,6 +1103,16 @@ void get_content_suffix_phrases(Next* root, const char* content, vector<ResInfo 
     if(endp == NULL) return;
     get_tree_suffix_phrases(endp, content, res_list);
 }
+void get_lcp_suffix_infos(Next* root, const char* content, vector<ResInfo *> &res_list){
+    vector<uint32_t> candidate_words;
+    if(!Utf8ToUnicode32(content, candidate_words)) return;
+    if(candidate_words.size() == 0) return;
+    string res_str = "";
+    Next * endp = get_lc_endp(root, res_str, candidate_words.begin(), candidate_words.end());
+    if(endp == NULL) return;
+    get_tree_suffix_phrases(endp, res_str, res_list);
+}
+
 
 extern "C" void * get_root_prx(){
     void *p = get_root();
@@ -1151,7 +1218,7 @@ extern "C" PyObject * getall_prx(void* p, const char *content){
     PyGILState_Release(gstate);
     return oplist;
 }
-extern "C" PyObject * get_prefix_phrases_prx(void *p, const char *content){
+extern "C" PyObject * get_phrase_prefix_infos_prx(void *p, const char *content){
     Next* root = (Next *)p;
     vector<ResInfo *> res_list; res_list.clear();
     get_content_prefix_phrases(root, content, res_list);
@@ -1178,10 +1245,38 @@ extern "C" PyObject * get_prefix_phrases_prx(void *p, const char *content){
     PyGILState_Release(gstate);
     return oplist;
 }
-extern "C" PyObject * get_suffix_phrases_prx(void *p, const char *content){
+extern "C" PyObject * get_phrase_suffix_infos_prx(void *p, const char *content){
     Next* root = (Next *)p;
     vector<ResInfo *> res_list; res_list.clear();
     get_content_suffix_phrases(root, content, res_list);
+
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    PyObject *oplist = PyList_New(res_list.size());
+    for(uint32_t j = 0; j < res_list.size(); j++){
+        PyObject* pTuple = PyTuple_New(3);
+        assert(PyTuple_Check(pTuple));
+        assert(PyTuple_Size(pTuple) == 3);
+        PyTuple_SetItem(pTuple, 0, Py_BuildValue("s", res_list[j]->phrase.c_str()));
+        PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->position));
+        if(res_list[j]->oinfo->type == 0){
+            Py_INCREF((PyObject *)res_list[j]->oinfo->p);
+            PyTuple_SetItem(pTuple, 2, Py_BuildValue("N", (PyObject *)res_list[j]->oinfo->p));
+        }else if(res_list[j]->oinfo->type == -1){
+            Py_INCREF(Py_None);
+            PyTuple_SetItem(pTuple, 2, Py_None);
+        }
+        PyList_SetItem(oplist, j, pTuple);
+        //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
+        delete res_list[j];
+    }
+    res_list.clear();
+    PyGILState_Release(gstate);
+    return oplist;
+}
+extern "C" PyObject * get_lcp_suffix_infos_prx(void *p, const char *content){
+    Next* root = (Next *)p;
+    vector<ResInfo *> res_list; res_list.clear();
+    get_lcp_suffix_infos(root, content, res_list);
 
     PyGILState_STATE gstate = PyGILState_Ensure();
     PyObject *oplist = PyList_New(res_list.size());

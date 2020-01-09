@@ -28,11 +28,14 @@ LID.cutall_prx.restype = py_object
 LID.getall_prx.argtypes = [c_void_p, c_char_p]
 LID.getall_prx.restype = py_object
 
-LID.get_prefix_phrases_prx.argtypes = [c_void_p, c_char_p]
-LID.get_prefix_phrases_prx.restype = py_object
+LID.get_phrase_prefix_infos_prx.argtypes = [c_void_p, c_char_p]
+LID.get_phrase_prefix_infos_prx.restype = py_object
 
-LID.get_suffix_phrases_prx.argtypes = [c_void_p, c_char_p]
-LID.get_suffix_phrases_prx.restype = py_object
+LID.get_phrase_suffix_infos_prx.argtypes = [c_void_p, c_char_p]
+LID.get_phrase_suffix_infos_prx.restype = py_object
+
+LID.get_lcp_suffix_infos_prx.argtypes = [c_void_p, c_char_p]
+LID.get_lcp_suffix_infos_prx.restype = py_object
 
 LID.exist_phrase_prx.argtypes = [c_void_p, c_char_p]
 LID.exist_phrase_prx.restype = c_bool
@@ -108,14 +111,21 @@ class Tree(object):
         """
         if not isinstance(content, str):
             content = content.encode('utf8')
-        return LID.get_prefix_phrases_prx(self.root, content)
+        return LID.get_phrase_prefix_infos_prx(self.root, content)
 
     def get_suffix(self, content):
         """ pass
         """
         if not isinstance(content, str):
             content = content.encode('utf8')
-        return LID.get_suffix_phrases_prx(self.root, content)
+        return LID.get_phrase_suffix_infos_prx(self.root, content)
+
+    def get_lcp_suffix(self, content):
+        """ pass
+        """
+        if not isinstance(content, str):
+            content = content.encode('utf8')
+        return LID.get_lcp_suffix_infos_prx(self.root, content)
 
     def free_root(self):
         """ pass
@@ -174,7 +184,8 @@ if __name__ == '__main__':
         root.insert('浪', 13)
         print 'end insert'
         print len(root.get_all('吴浪' * 11000))
-        time.sleep(20)
+        import pdb
+        pdb.set_trace()
 
         print root.remove('222'), '++'
         print root.remove('浪'), '++'
