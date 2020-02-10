@@ -886,9 +886,11 @@ extern "C" void * get_root_prx(){
     return p;
 }
 extern "C" void free_root_prx(void* p){
+    PyGILState_STATE gstate = PyGILState_Ensure();
     Next* root = (Next *)p;
     free_tree(root);
     free(root);
+    PyGILState_Release(gstate);
 }
 extern "C" bool insert_prx(void* p, const char* content){
     Next* root = (Next *)p;
@@ -903,6 +905,7 @@ extern "C" PyObject * cutall_prx(void* p, const char *content){
     vector<Info *> res_list; res_list.clear();
     cut_content_all(root, content, res_list);
 
+    PyGILState_STATE gstate = PyGILState_Ensure();
     PyObject *oplist = PyList_New(res_list.size());
     for(uint32_t j = 0; j < res_list.size(); j++){
         PyObject* pTuple = PyTuple_New(2);
@@ -914,6 +917,7 @@ extern "C" PyObject * cutall_prx(void* p, const char *content){
         //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
         delete res_list[j];
     }
+    PyGILState_Release(gstate);
     return oplist;
 }
 extern "C" PyObject * cutmax_prx(void* p, const char *content){
@@ -921,6 +925,7 @@ extern "C" PyObject * cutmax_prx(void* p, const char *content){
     vector<Info *> res_list; res_list.clear();
     cut_content_max(root, content, res_list);
 
+    PyGILState_STATE gstate = PyGILState_Ensure();
     PyObject *oplist = PyList_New(res_list.size());
     for(uint32_t j = 0; j < res_list.size(); j++){
         PyObject* pTuple = PyTuple_New(2);
@@ -932,6 +937,7 @@ extern "C" PyObject * cutmax_prx(void* p, const char *content){
         //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
         delete res_list[j];
     }
+    PyGILState_Release(gstate);
     return oplist;
 }
 extern "C" PyObject * getall_prx(void* p, const char *content){
@@ -939,6 +945,7 @@ extern "C" PyObject * getall_prx(void* p, const char *content){
     vector<Info *> res_list; res_list.clear();
     get_content_all(root, content, res_list);
 
+    PyGILState_STATE gstate = PyGILState_Ensure();
     PyObject *oplist = PyList_New(res_list.size());
     for(uint32_t j = 0; j < res_list.size(); j++){
         PyObject* pTuple = PyTuple_New(2);
@@ -950,6 +957,7 @@ extern "C" PyObject * getall_prx(void* p, const char *content){
         //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
         delete res_list[j];
     }
+    PyGILState_Release(gstate);
     return oplist;
 }
 extern "C" PyObject * get_prefix_phrases_prx(void *p, const char *content){
@@ -957,12 +965,14 @@ extern "C" PyObject * get_prefix_phrases_prx(void *p, const char *content){
     vector<Info *> res_list; res_list.clear();
     get_content_prefix_phrases(root, content, res_list);
 
+    PyGILState_STATE gstate = PyGILState_Ensure();
     PyObject *oplist = PyList_New(res_list.size());
     for(uint32_t j = 0; j < res_list.size(); j++){
         PyList_SetItem(oplist, j, Py_BuildValue("s", res_list[j]->phrase.c_str()));
         //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
         delete res_list[j];
     }
+    PyGILState_Release(gstate);
     return oplist;
 }
 extern "C" PyObject * get_suffix_phrases_prx(void *p, const char *content){
@@ -970,11 +980,13 @@ extern "C" PyObject * get_suffix_phrases_prx(void *p, const char *content){
     vector<string> res_list; res_list.clear();
     get_content_suffix_phrases(root, content, res_list);
 
+    PyGILState_STATE gstate = PyGILState_Ensure();
     PyObject *oplist = PyList_New(res_list.size());
     for(uint32_t j = 0; j < res_list.size(); j++){
         PyList_SetItem(oplist, j, Py_BuildValue("s", res_list[j].c_str()));
         //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
     }
+    PyGILState_Release(gstate);
     res_list.clear();
     return oplist;
 }

@@ -7,7 +7,7 @@ import sys
 import time
 import ctypes
 import datetime
-from ctypes import c_char_p, c_int, c_float, c_double, c_bool, c_void_p, py_object
+from ctypes import c_char_p, c_int, c_float, c_double, c_bool, c_void_p, py_object, byref
 
 LID = ctypes.CDLL('%s/token2map_lib.so' % '.')
 
@@ -45,6 +45,9 @@ LID.get_kv_prx.restype = py_object
 
 LID.cutmax_prx.argtypes = [c_void_p, c_char_p]
 LID.cutmax_prx.restype = py_object
+
+LID.get_splited_infos_prx.argtypes = [c_void_p, c_char_p, c_bool]
+LID.get_splited_infos_prx.restype = py_object
 
 LID.test.restype = py_object
 
@@ -127,6 +130,13 @@ class Tree(object):
             content = content.encode('utf8')
         return LID.get_lcp_suffix_infos_prx(self.root, content)
 
+    def get_split(self, content, save_spliter=False):
+        """ pass
+        """
+        if not isinstance(content, str):
+            content = content.encode('utf8')
+        return LID.get_splited_infos_prx(self.root, content, save_spliter)
+
     def free_root(self):
         """ pass
         """
@@ -142,9 +152,15 @@ if __name__ == '__main__':
     idx = 0;
     while True:
         root = Tree()
+        a = {'22': '33'}
+        root.insert('2', a)
+        print  root.get_kv('2')
+        a['22'] = '44'
+        print  root.get_kv('2')
+        break
         #print 'insert 2',
-        root.insert('2', 1)
-        root.test()
+        print root.insert('2', 1)
+        print root.test()
 
         #root.remove('2')
         #print root.get_kv('2')

@@ -6,6 +6,7 @@
 # include<map>
 # include<vector>
 # include<stdint.h>
+# include<queue>
 
 using namespace std;
 
@@ -572,6 +573,14 @@ struct ResInfo{
     uint32_t phrase_len;
     const OInfo *oinfo;
 };
+ResInfo * get_resinfo(){
+    ResInfo * t = new ResInfo();
+    t->phrase = "";
+    t->position = 0;
+    t->phrase_len = 0;
+    t->oinfo = NULL;
+    return t;
+}
 
 
 /*
@@ -1089,6 +1098,51 @@ void cut_content_max(Next* root, const char* content, vector<ResInfo *>& res_lis
         position++;
     }
 }
+void split_content_all(Next* root, const char* content, vector<ResInfo *>& res_list, bool save_spliter=false){
+    vector<uint32_t> candidate_words;
+    if(!Utf8ToUnicode32(content, candidate_words)) return;
+    int32_t position = 0, now_max_position; res_list.clear();
+
+    vector<uint32_t>:: iterator it = candidate_words.begin();
+
+    ResInfo * res_info, *recall_info;
+    res_info = get_resinfo();
+    recall_info = get_resinfo();
+    while (it != candidate_words.end()){
+        now_max_position = cut_max(root, it, candidate_words.end(), recall_info, position);
+        if(now_max_position == -1){
+            Unicode32ToUtf8(*it, res_info->phrase);
+            res_info->position = position;
+            res_info->phrase_len += 1;
+            res_info->oinfo = NULL;
+        }else{
+            it += recall_info->phrase_len - 1;
+            position = recall_info->position; 
+            if(res_info->phrase_len != 0){
+                res_list.push_back(res_info);
+                res_info = get_resinfo();
+            }
+            if(save_spliter){
+                res_list.push_back(recall_info);
+                recall_info = get_resinfo();
+            }else{
+                recall_info->phrase = "";
+                recall_info->position = 0;
+                recall_info->phrase_len = 0;
+                recall_info->oinfo = NULL;
+            }
+        }
+        it++;
+        position++;
+    }
+    delete recall_info;
+    if(res_info->phrase_len == 0){
+        delete res_info;
+    }else{
+        res_list.push_back(res_info);
+    }
+}
+
 void get_content_prefix_phrases(Next* root, const char* content, vector<ResInfo *>& res_list){
     vector<uint32_t> candidate_words;
     if(!Utf8ToUnicode32(content, candidate_words)) return;
@@ -1292,6 +1346,36 @@ extern "C" PyObject * get_lcp_suffix_infos_prx(void *p, const char *content){
         }else if(res_list[j]->oinfo->type == -1){
             Py_INCREF(Py_None);
             PyTuple_SetItem(pTuple, 2, Py_None);
+        }
+        PyList_SetItem(oplist, j, pTuple);
+        //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
+        delete res_list[j];
+    }
+    res_list.clear();
+    PyGILState_Release(gstate);
+    return oplist;
+}
+extern "C" PyObject * get_splited_infos_prx(void *p, const char *content, bool save_spliter){
+    Next* root = (Next *)p;
+    vector<ResInfo *> res_list; res_list.clear();
+    split_content_all(root, content, res_list, save_spliter);
+
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    PyObject *oplist = PyList_New(res_list.size());
+    for(uint32_t j = 0; j < res_list.size(); j++){
+        PyObject* pTuple = PyTuple_New(3);
+        assert(PyTuple_Check(pTuple));
+        assert(PyTuple_Size(pTuple) == 3);
+        PyTuple_SetItem(pTuple, 0, Py_BuildValue("s", res_list[j]->phrase.c_str()));
+        PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->position));
+        if(res_list[j]->oinfo != NULL && res_list[j]->oinfo->type == 0){
+            Py_INCREF((PyObject *)res_list[j]->oinfo->p);
+            PyTuple_SetItem(pTuple, 2, Py_BuildValue("N", (PyObject *)res_list[j]->oinfo->p));
+        }else if(res_list[j]->oinfo == NULL){
+            Py_INCREF(Py_None);
+            PyTuple_SetItem(pTuple, 2, Py_None);
+        }else{
+            throw("unknow ResInfo->type");
         }
         PyList_SetItem(oplist, j, pTuple);
         //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
