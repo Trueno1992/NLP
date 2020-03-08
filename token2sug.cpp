@@ -7,6 +7,9 @@
 # include<vector>
 # include<stdint.h>
 # include<queue>
+# include<algorithm>
+# include<queue>
+# include<utility>
 
 using namespace std;
 
@@ -119,15 +122,30 @@ void Unicode32ToUtf8(const uint32_t &ui, string& res) {
 }
 
 
+void PrintUnicode(const uint32_t &ui) {
+  string res = "";
+  if(ui <= 0x7f) {
+    res += char(ui);
+  } else if(ui <= 0x7ff) {
+    res += char(((ui >> 6) & 0x1f) | 0xc0);
+    res += char((ui & 0x3f) | 0x80);
+  } else if(ui <= 0xffff) {
+    res += char(((ui >> 12) & 0x0f) | 0xe0);
+    res += char(((ui >> 6) & 0x3f) | 0x80);
+    res += char((ui & 0x3f) | 0x80);
+  } else {
+    res += char(((ui >> 18) & 0x03) | 0xf0);
+    res += char(((ui >> 12) & 0x3f) | 0x80);
+    res += char(((ui >> 6) & 0x3f) | 0x80);
+    res += char((ui & 0x3f) | 0x80);
+  }
+  cout<<res<<endl;
+}
+
+
 struct OInfo{
     void *p;
     int8_t type;
-    /*
-    OInfo(void *tmp_p, uint8_t tmp_type){
-        p = tmp_p;
-        type = tmp_type;
-    }
-    */
 };
 
 
@@ -140,6 +158,8 @@ struct Next{
 struct Node_1{
     bool is_end;
     uint32_t word;
+    int weight;
+    int max_wei;
     int in;
     Next *next;
     OInfo *oinfo;
@@ -149,8 +169,10 @@ struct Node_1{
 struct Node_3{
     bool is_end;
     uint32_t words[3];
-    int in;
+    int max_wei[3];
     Next *nexts[3];
+    int weight;
+    int in;
     OInfo *oinfo;
 };
 
@@ -158,8 +180,10 @@ struct Node_3{
 struct Node_6{
     bool is_end;
     uint32_t words[6];
-    int in;
+    int max_wei[6];
     Next *nexts[6];
+    int weight;
+    int in;
     OInfo *oinfo;
 };
 
@@ -167,6 +191,9 @@ struct Node_6{
 struct Nodes{
     bool is_end;
     map<uint32_t, Next *> *next_map;
+    map<uint32_t, int> *next_max_wei;
+    vector<pair<uint32_t, int> > *next_top_wei;
+    int weight;
     int in;
     OInfo *oinfo;
 };
@@ -208,7 +235,6 @@ int get_node_in(Next *p){
         throw("p->type is not in (0, 1, 3, 6)");
     }
 }
-
 const OInfo * get_node_oinfo(Next *p){
     Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
     if(p->type == 0){
@@ -244,6 +270,133 @@ void update_node_end(Next *p, bool is_end){
     }else{
         throw("p->type is not in (0, 1, 3, 6)");
     }
+}
+void update_node_weight(Next *p, int weight){
+    Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
+    if(p->type == 0){
+        pn = (Nodes *)p->next;
+        pn->weight = weight;
+    }else if (p->type == 1){
+        p1 = (Node_1 *)p->next;
+        p1->weight = weight;
+    }else if (p->type == 3){
+        p3 = (Node_3 *)p->next;
+        p3->weight = weight;
+    }else if (p->type == 6){
+        p6 = (Node_6 *)p->next;
+        p6->weight = weight;
+    }else{
+        throw("p->type is not in (0, 1, 3, 6)");
+    }
+}
+int get_node_weight(Next *p){
+    Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
+    if(p->type == 0){
+        pn = (Nodes *)p->next;
+        return pn->weight;
+    }else if (p->type == 1){
+        p1 = (Node_1 *)p->next;
+        return p1->weight;
+    }else if (p->type == 3){
+        p3 = (Node_3 *)p->next;
+        return p3->weight;
+    }else if (p->type == 6){
+        p6 = (Node_6 *)p->next;
+        return p6->weight;
+    }else{
+        throw("p->type is not in (0, 1, 3, 6)");
+    }
+}
+void update_node_next_max_wei(Next *p, int word, int weight){
+    Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
+    if(p->type == 0){
+        pn = (Nodes *)p->next;
+        (*pn->next_max_wei)[word] = weight;
+        pn->next_top_wei->clear();
+    }else if (p->type == 1){
+        p1 = (Node_1 *)p->next;
+        if(p1->word == word){
+            p1->max_wei = weight;
+        }else{
+            throw("update_node_weight_1 error");
+        }
+    }else if (p->type == 3){
+        p3 = (Node_3 *)p->next;
+        for(int i = 0; i < 3; i++){
+            if(p3->words[i] == word){
+                p3->max_wei[i] = weight;
+                return;
+            }
+        }
+        throw("update_node_weight_3 error");
+    }else if (p->type == 6){
+        p6 = (Node_6 *)p->next;
+        for(int i = 0; i < 6; i++){
+            if(p6->words[i] == word){
+                p6->max_wei[i] = weight;
+                return;
+            }
+        }
+        throw("update_node_weight_6 error");
+    }else{
+        throw("p->type is not in (0, 1, 3, 6)");
+    }
+}
+int get_node_next_max_wei(Next *p, int word){
+    Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
+    if(p->type == 0){
+        pn = (Nodes *)p->next;
+        return (*pn->next_max_wei)[word];
+    }else if (p->type == 1){
+        p1 = (Node_1 *)p->next;
+        if(p1->word == word) return p1->max_wei;
+        throw("update_node_weight_1 error");
+    }else if (p->type == 3){
+        p3 = (Node_3 *)p->next;
+        for(int i = 0; i < 3; i++){
+            if(p3->words[i] == word) return p3->max_wei[i];
+        }
+        throw("update_node_weight_3 error");
+    }else if (p->type == 6){
+        p6 = (Node_6 *)p->next;
+        for(int i = 0; i < 6; i++){
+            if(p6->words[i] == word) return p6->max_wei[i];
+        }
+        throw("update_node_weight_6 error");
+    }else{
+        throw("p->type is not in (0, 1, 3, 6)");
+    }
+    return -1;
+}
+int get_node_max_weight(Next *p){
+    Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
+    int max_weight = -(1<<30);
+    if(p->type == 0){
+        pn = (Nodes *)p->next;
+        max_weight = max(max_weight, pn->weight);
+        for(map<uint32_t, int>::iterator it = pn->next_max_wei->begin(); it != pn->next_max_wei->end(); it++){
+            max_weight = max(it->second, max_weight);
+        }
+    }else if (p->type == 1){
+        p1 = (Node_1 *)p->next;
+        max_weight = max(max_weight, p1->weight);
+        max_weight = max(p1->max_wei, max_weight);
+    }else if (p->type == 3){
+        p3 = (Node_3 *)p->next;
+        max_weight = max(max_weight, p3->weight);
+        for(int i = 0; i < 3; i++){
+            max_weight = max(p3->max_wei[i], max_weight);
+        }
+    }else if (p->type == 6){
+        p6 = (Node_6 *)p->next;
+        max_weight = max(max_weight, p6->weight);
+        for(int i = 0; i < 6; i++){
+            max_weight = max(p6->max_wei[i], max_weight);
+        }
+    }else{
+        throw("p->type is not in (0, 1, 3, 6)");
+    }
+    return max_weight;
 }
 void increase_node_in(Next *p, int num){
     Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
@@ -341,7 +494,10 @@ Node_1 * get_node_1(){
     Node_1 * tmp_node = (Node_1 *)malloc(sizeof(Node_1));
     tmp_node->is_end = false;
     tmp_node->word = 0;
+    tmp_node->max_wei = 0;
     tmp_node->next = NULL;
+
+    tmp_node->weight = 0;
     tmp_node->oinfo = NULL;
     tmp_node->in = 0;
     return tmp_node;
@@ -352,7 +508,9 @@ Node_3 * get_node_3(){
     for(unsigned int i = 0; i < 3; i ++){
         new_node->words[i] = 0;
         new_node->nexts[i] = NULL;
+        new_node->max_wei[i] = 0;
     }
+    new_node->weight = 0;
     new_node->in = 0;
     new_node->oinfo = NULL;
     return new_node;
@@ -363,7 +521,9 @@ Node_6 * get_node_6(){
     for(unsigned int i = 0; i < 6; i ++){
         new_node->words[i] = 0;
         new_node->nexts[i] = NULL;
+        new_node->max_wei[i] = 0;
     }
+    new_node->weight = 0;
     new_node->in = 0;
     new_node->oinfo = NULL;
     return new_node;
@@ -372,16 +532,39 @@ Nodes * get_nodes(){
     Nodes * new_node = (Nodes *)malloc(sizeof(Nodes));
     new_node->is_end = false;
     new_node->next_map = new map<uint32_t, Next *>;
+    new_node->next_max_wei = new map<uint32_t, int>;
+    new_node->next_top_wei = new vector<pair<uint32_t, int> >;
     new_node->next_map->clear();
+    new_node->next_max_wei->clear();
+    new_node->next_top_wei->clear();
+
+    new_node->weight = 0;
     new_node->in = 0;
     new_node->oinfo = NULL;
     return new_node;
 }
 
 
-bool insert(Next* root, const char* content, OInfo *oinfo){
+void dfs_update_father_weight(vector<Next *>   &vec_path,
+                              vector<uint32_t> &word_path,
+                              int index,
+                              int weight){
+    if(index < 0) return;
+    Next * fat = vec_path[index];
+    int fat_word = word_path[index];
+    int fat_wei = get_node_next_max_wei(fat, fat_word);
+    if(fat_wei >= weight) return;
+    update_node_next_max_wei(fat, fat_word, weight);
+    int son_weight = get_node_max_weight(fat);
+    if(index > 0) dfs_update_father_weight(vec_path,
+                                           word_path,
+                                           index - 1,
+                                           son_weight);
+}
+
+
+bool insert(Next* root, const char* content, OInfo *oinfo, int weight=0){
     int dep = 0; Next* p = root; Next** parent = &root;
-    //printf("%d --\n", root->type);
 
     vector<uint32_t> candidate_words;
     if(!Utf8ToUnicode32(content, candidate_words)) return false;
@@ -399,19 +582,23 @@ bool insert(Next* root, const char* content, OInfo *oinfo){
             if(ik != pn->next_map->end()){
                 parent = &ik->second;
                 p = ik->second;
+                (*pn->next_max_wei)[*it] = max((*pn->next_max_wei)[*it], weight);
             }else{
                 Next * tmp_next = (Next *)malloc(sizeof(Next));
                 tmp_next->next = get_node_1();
                 tmp_next->type = 1;
 
                 (*pn->next_map)[*it] = tmp_next;
+                (*pn->next_max_wei)[*it] = weight;
                 parent = &tmp_next;
                 p = tmp_next;
             }
+            pn->next_top_wei->clear();
         }else if(p->type == 1){
             p1 = (Node_1 * )p->next;
             p1->in += 1;
             if(p1->next != NULL && p1->word == *it){
+                p1->max_wei = max(p1->max_wei, weight);
                 parent = &(p1->next);
                 p = p1->next;
             }else{
@@ -419,6 +606,7 @@ bool insert(Next* root, const char* content, OInfo *oinfo){
                     p1->next = (Next *)malloc(sizeof(Next));
                     p1->next->next = get_node_1();
                     p1->next->type = 1;
+                    p1->max_wei = weight;
                     p1->word = *it;
 
                     parent = &(p1->next);
@@ -427,17 +615,20 @@ bool insert(Next* root, const char* content, OInfo *oinfo){
                     Node_3 * new_node = get_node_3();
                     new_node->words[0] = p1->word;
                     new_node->nexts[0] = p1->next;
-                    new_node->is_end = p1->is_end;
-                    new_node->oinfo = p1->oinfo;
+                    new_node->max_wei[0] = p1->max_wei;
 
                     new_node->nexts[1] = (Next *)malloc(sizeof(Next));
                     new_node->nexts[1]->next = get_node_1();
+
                     new_node->nexts[1]->type = 1;
                     new_node->words[1] = *it;
+                    new_node->max_wei[1] = weight;
 
+                    new_node->weight = p1->weight;
                     new_node->is_end = p1->is_end;
                     new_node->in = p1->in;
                     new_node->oinfo = p1->oinfo;
+
                     (*parent)->next = new_node;
                     (*parent)->type = 3;
                     free(p1);
@@ -454,6 +645,7 @@ bool insert(Next* root, const char* content, OInfo *oinfo){
             for(unsigned int i = 0; i < 3; i++){
                 if(p3->words[i] == *it){
                     is_find = true;
+                    p3->max_wei[i] = max(p3->max_wei[i], weight);
                     parent = &(p3->nexts[i]);
                     p = p3->nexts[i];
                     break;
@@ -467,6 +659,7 @@ bool insert(Next* root, const char* content, OInfo *oinfo){
                     p3->nexts[i]->next = get_node_1();
                     p3->nexts[i]->type = 1;
                     p3->words[i] = *it;
+                    p3->max_wei[i] = weight;
 
                     parent = &(p3->nexts[i]);
                     p = p3->nexts[i];
@@ -479,14 +672,17 @@ bool insert(Next* root, const char* content, OInfo *oinfo){
                     for(unsigned int i = 0; i < 3; i++){
                         new_node->words[i] = p3->words[i];
                         new_node->nexts[i] = p3->nexts[i];
-                        new_node->is_end = p3->is_end;
-                        new_node->oinfo = p3->oinfo;
+                        new_node->max_wei[i] = p3->max_wei[i];
                     }
                     new_node->nexts[3] = (Next *)malloc(sizeof(Next));
                     new_node->nexts[3]->next = get_node_1();
+
                     new_node->nexts[3]->type = 1;
+                    new_node->max_wei[3] = weight;
                     new_node->words[3] = *it;
+
                     new_node->in = p3->in;
+                    new_node->weight = p3->weight;
                     new_node->is_end = p3->is_end;
                     new_node->oinfo = p3->oinfo;
 
@@ -505,6 +701,7 @@ bool insert(Next* root, const char* content, OInfo *oinfo){
             for(unsigned int i = 0; i < 6; i++){
                 if(p6->words[i] == *it){
                     is_find = true;
+                    p6->max_wei[i] = max(p6->max_wei[i], weight);
                     parent = &(p6->nexts[i]);
                     p = p6->nexts[i];
                     break;
@@ -518,6 +715,7 @@ bool insert(Next* root, const char* content, OInfo *oinfo){
                     p6->nexts[i]->next = get_node_1();
                     p6->nexts[i]->type = 1;
                     p6->words[i] = *it;
+                    p6->max_wei[i] = weight;
 
                     parent = &(p6->nexts[i]);
                     p = p6->nexts[i];
@@ -533,10 +731,13 @@ bool insert(Next* root, const char* content, OInfo *oinfo){
 
                     for(unsigned int i = 0; i < 6; i++){
                         (*new_node->next_map)[p6->words[i]] = p6->nexts[i];
+                        (*new_node->next_max_wei)[p6->words[i]] = p6->max_wei[i];
                     }
                     (*new_node->next_map)[*it] = tt_next;
+                    (*new_node->next_max_wei)[*it] = weight;
                     new_node->in = p6->in;
                     new_node->is_end = p6->is_end;
+                    new_node->weight = p6->weight;
                     new_node->oinfo = p6->oinfo;
 
                     (*parent)->next = new_node;
@@ -560,9 +761,17 @@ bool insert(Next* root, const char* content, OInfo *oinfo){
         if(vec_path.size() != 0){
             increase_node_in(p, -1);
         }
+        update_node_weight(p, weight);
+        int son_weight = get_node_max_weight(p);
+        if(vec_path.size() >= 1)
+            dfs_update_father_weight(vec_path,
+                                     candidate_words,
+                                     vec_path.size() - 1,
+                                     son_weight);
     }
     increase_node_in(p, 1);
     update_node_oinfo(p, oinfo);
+    update_node_weight(p, weight);
     update_node_end(p, true);
     return true;
 }
@@ -632,9 +841,17 @@ bool remove(Next* root, const char* content){
         if(vec_path.size() != 0){
             increase_node_in(p, -1);
         }
+        update_node_weight(p, 0);
+        int son_weight = get_node_max_weight(p);
+        if(vec_path.size() >= 1)
+            dfs_update_father_weight(vec_path,
+                                     candidate_words,
+                                     vec_path.size() - 1,
+                                     son_weight);
     }
     update_node_oinfo(p, NULL);
     update_node_end(p, false);
+    update_node_weight(p, 0);
     return res;
 }
 
@@ -643,6 +860,7 @@ struct ResInfo{
     string phrase;
     uint32_t position;
     uint32_t phrase_len;
+    int weight;
     const OInfo *oinfo;
 };
 ResInfo * get_resinfo(){
@@ -651,10 +869,9 @@ ResInfo * get_resinfo(){
     t->position = 0;
     t->phrase_len = 0;
     t->oinfo = NULL;
+    t->weight = 0;
     return t;
 }
-
-
 /*
 return: 从当前位置切分的最长切分位置
 */
@@ -843,58 +1060,113 @@ int32_t cut_max(Next* root,
 }
 
 
-void get_tree_suffix_phrases(Next * p, const string &res_str, vector<ResInfo *> &res_list, int dep, int c_limit=-1, int d_limit=-1){
-    if(c_limit >= 0 && res_list.size() >= c_limit) return;
+struct cmp1 { //从大到小
+    template <typename T, typename U>
+    bool operator()(T const &left, U const &right)
+    {
+        if (left.first.second < right.first.second) return true;
+        return false;
+    }
+};
+struct cmp2 { //从小到大
+    template <typename T, typename U>
+    bool operator()(T const &left, U const &right) {
+        if (left.first.second > right.first.second) return true;
+        return false;
+    }
+};
+bool cmp3(const pair<uint32_t, int> a, const pair<uint32_t, int> b) {
+    return a.second > b.second; /// 大的在前
+}
+void get_tree_suffix_phrases(Next * p,
+                             const string &res_str,
+                             vector<ResInfo *> &res_list,
+                             int c_limit=(1<<30),
+                             int d_limit=(1<<30)){
+    priority_queue<pair<pair<Next *, int>, pair<string, int> >, vector<pair<pair<Next *, int>, pair<string, int> > >, cmp2>queue;
+    while(!queue.empty()) queue.pop();
+    priority_queue<pair<pair<Next *, int>, pair<string, int> >, vector<pair<pair<Next *, int>, pair<string, int> > >, cmp2>result;
+    while(!queue.empty()) queue.pop();
+    queue.push(make_pair(make_pair(p, get_node_weight(p)), make_pair(string(res_str), 0)));
 
-    if(d_limit >= 0 && dep > d_limit) return;
+    while(queue.size()){
+        pair<pair<Next *, int>, pair<string, int> > node = queue.top(); queue.pop();
+        Next *p = node.first.first;
+        string res_str = node.second.first;
+        int dep = node.second.second;
+        if(dep > d_limit) continue;
 
-    if (get_node_end(p)){
+        if (get_node_end(p)){
+            result.push(make_pair(make_pair(p, get_node_weight(p)), make_pair(res_str, dep)));
+            while(result.size() > c_limit) result.pop();
+        }
+        if (p->type == 0){
+            Nodes* pn = (Nodes *)p->next;
+            if (pn->next_max_wei != NULL && pn->next_top_wei->size() == 0){
+                for(map<uint32_t, int>::iterator it = pn->next_max_wei->begin(); it != pn->next_max_wei->end(); it++){
+                    if((*pn->next_map)[it->first] != NULL){
+                        pn->next_top_wei->push_back(make_pair(it->first, it->second));
+                    }
+                }
+                sort(pn->next_top_wei->begin(), pn->next_top_wei->end(), cmp3);
+            }
+            int j = 0;
+            for(vector<pair<uint32_t, int> >::iterator it = pn->next_top_wei->begin(); it != pn->next_top_wei->end(); it++){
+                if(queue.size() >= c_limit && it->second <= queue.top().first.second) break;
+                if(result.size() >= c_limit && it->second <= result.top().first.second) break;
+                string tmp_str = res_str; Unicode32ToUtf8(it->first, tmp_str);
+                //cout<<"1"<<" "<<it->second<<" "<<(*pn->next_map).size()<<" "; PrintUnicode(it->first);
+                queue.push(make_pair(make_pair((*pn->next_map)[it->first], it->second), make_pair(tmp_str, dep + 1)));
+                while(queue.size() > c_limit) queue.pop();
+                //cout<<"2"<<endl;
+                if((++j) > c_limit)throw("error sort");
+                //cout<<"d"<<endl;
+
+            }
+        }else if (p->type == 1){
+            Node_1* p1 = (Node_1 *)p->next;
+            if(p1->next == NULL) continue;
+            if(queue.size() >= c_limit && p1->max_wei <= queue.top().first.second) continue;
+            if(result.size() >= c_limit && p1->max_wei <= result.top().first.second) continue;
+            string tmp_str = res_str; Unicode32ToUtf8(p1->word, tmp_str);
+            queue.push(make_pair(make_pair(p1->next, p1->max_wei), make_pair(tmp_str, dep + 1)));
+            while(queue.size() > c_limit) queue.pop();
+        }else if (p->type == 3){
+            Node_3* p3 = (Node_3 *)p->next;
+            for(uint32_t i = 0; i < 3; i++){
+                if(p3->nexts[i] == NULL) continue;
+                if(queue.size() >= c_limit && p3->max_wei[i] <= queue.top().first.second) continue;
+                if(result.size() >= c_limit && p3->max_wei[i] <= result.top().first.second) continue;
+                string tmp_str = res_str; Unicode32ToUtf8(p3->words[i], tmp_str);
+                queue.push(make_pair(make_pair(p3->nexts[i], p3->max_wei[i]), make_pair(tmp_str, dep + 1)));
+                while(queue.size() > c_limit) queue.pop();
+            }
+        } else if (p->type == 6){
+            Node_6* p6 = (Node_6 *)p->next;
+            for(uint32_t i = 0; i < 6; i++){
+                if(p6->nexts[i] == NULL) continue;
+                if(queue.size() >= c_limit && p6->max_wei[i] <= queue.top().first.second) continue;
+                if(result.size() >= c_limit && p6->max_wei[i] <= result.top().first.second) continue;
+                string tmp_str = res_str; Unicode32ToUtf8(p6->words[i], tmp_str);
+                queue.push(make_pair(make_pair(p6->nexts[i], p6->max_wei[i]), make_pair(tmp_str, dep + 1)));
+                while(queue.size() > c_limit) queue.pop();
+            }
+        } else{
+            throw("p->type not in (0, 1, 3, 6)");
+        }
+        while(queue.size() > c_limit) queue.pop();
+        while(result.size() > c_limit) result.pop();
+    }
+    while(result.size() > c_limit) result.pop();
+    while(result.size() != 0){
+        pair<pair<Next *, int>, pair<string, int> > node = result.top(); result.pop();
         ResInfo *res_info = new ResInfo();
-        res_info->phrase = res_str;
-        res_info->position = -1;
-        res_info->oinfo = get_node_oinfo(p);
+        res_info->phrase = node.second.first;
+        res_info->weight = node.first.second;
+        res_info->oinfo = get_node_oinfo(node.first.first);
         res_list.push_back(res_info);
     }
-
-    if (p->type == 0){
-        Nodes* pn = (Nodes *)p->next;
-        if (pn->next_map == NULL) return;
-        for(map<uint32_t, Next *>::iterator it = pn->next_map->begin(); it != pn->next_map->end(); it++){
-            if (it->second == NULL) return;
-            p = it->second;
-            uint32_t word = it->first;
-            string tmp_str = res_str;
-            Unicode32ToUtf8(it->first, tmp_str);
-            get_tree_suffix_phrases(p, tmp_str, res_list, dep + 1, c_limit, d_limit);
-        }
-    }else if (p->type == 1){
-        Node_1* p1 = (Node_1 *)p->next;
-        if(p1->next == NULL) return;
-        p = p1->next;
-        string tmp_str = res_str;
-        Unicode32ToUtf8(p1->word, tmp_str);
-        get_tree_suffix_phrases(p, tmp_str, res_list, dep + 1, c_limit, d_limit);
-    }else if (p->type == 3){
-        Node_3* p3 = (Node_3 *)p->next;
-        for(uint32_t i = 0; i < 3; i++){
-            if(p3->nexts[i] == NULL) continue;
-            p = p3->nexts[i];
-            string tmp_str = res_str;
-            Unicode32ToUtf8(p3->words[i], tmp_str);
-            get_tree_suffix_phrases(p, tmp_str, res_list, dep + 1, c_limit, d_limit);
-        }
-    } else if (p->type == 6){
-        Node_6* p6 = (Node_6 *)p->next;
-        for(uint32_t i = 0; i < 6; i++){
-            if(p6->nexts[i] == NULL) continue;
-            p = p6->nexts[i];
-            string tmp_str = res_str;
-            Unicode32ToUtf8(p6->words[i], tmp_str);
-            get_tree_suffix_phrases(p, tmp_str, res_list, dep + 1, c_limit, d_limit);
-        }
-    } else{
-        throw("p->type not in (0, 1, 3, 6)");
-    }
+    reverse(res_list.begin(), res_list.end());
 }
 
 
@@ -1022,7 +1294,9 @@ void free_tree(Next* p){
                 it->second = NULL;
             }
         }
-        pn->next_map->clear();
+        if(pn->next_map != NULL)pn->next_map->clear();
+        if(pn->next_max_wei != NULL) pn->next_max_wei->clear();
+        if(pn->next_top_wei != NULL) pn->next_top_wei->clear();
         delete pn->next_map;
         pn->next_map = NULL;
         if(pn->oinfo != NULL && pn->oinfo->p != NULL){
@@ -1222,13 +1496,13 @@ void get_content_prefix_phrases(Next* root, const char* content, vector<ResInfo 
     if(candidate_words.size() == 0) return;
     cut_from(root, candidate_words.begin(), candidate_words.end(), res_list, 0);
 }
-void get_content_suffix_phrases(Next* root, const char* content, vector<ResInfo *> &res_list, int c_limit=-1, int d_limit=-1){
+void get_content_suffix_phrases(Next* root, const char* content, vector<ResInfo *> &res_list, int c_limit=(1<<30), int d_limit=(1<<30)){
     vector<uint32_t> candidate_words;
     if(!Utf8ToUnicode32(content, candidate_words)) return;
     if(candidate_words.size() == 0) return;
     Next * endp = get_phrase_endp(root, candidate_words.begin(), candidate_words.end());
     if(endp == NULL) return;
-    get_tree_suffix_phrases(endp, content, res_list, 0, c_limit, d_limit);
+    get_tree_suffix_phrases(endp, content, res_list, c_limit, d_limit);
 }
 int get_content_suffix_count(Next* root, const char* content, vector<ResInfo *> &res_list){
     vector<uint32_t> candidate_words;
@@ -1238,14 +1512,14 @@ int get_content_suffix_count(Next* root, const char* content, vector<ResInfo *> 
     if(endp == NULL) return 0;
     return get_node_in(endp);
 }
-void get_lcp_suffix_infos(Next* root, const char* content, vector<ResInfo *> &res_list, int c_limit=-1, int d_limit=-1){
+void get_lcp_suffix_infos(Next* root, const char* content, vector<ResInfo *> &res_list, int c_limit=(1<<30), int d_limit=(1<<30)){
     vector<uint32_t> candidate_words;
     if(!Utf8ToUnicode32(content, candidate_words)) return;
     if(candidate_words.size() == 0) return;
     string res_str = "";
     Next * endp = get_lcp_endp(root, res_str, candidate_words.begin(), candidate_words.end());
     if(endp == NULL) return;
-    get_tree_suffix_phrases(endp, res_str, res_list, 0, c_limit, d_limit);
+    get_tree_suffix_phrases(endp, res_str, res_list, c_limit, d_limit);
 }
 int get_lcp_suffix_count(Next* root, const char* content, vector<ResInfo *> &res_list){
     vector<uint32_t> candidate_words;
@@ -1269,11 +1543,11 @@ extern "C" void free_root_prx(void* p){
     free(root);
     PyGILState_Release(gstate);
 }
-extern "C" bool insert_prx(void* p, const char* content, PyObject * oinfo){
+extern "C" bool insert_prx(void* p, const char* content, PyObject * oinfo, int weight){
     Py_INCREF(oinfo);
     Next* root = (Next *)p;
     OInfo* tmp_info = get_oinfo(oinfo, 0);
-    return insert(root, content, tmp_info);
+    return insert(root, content, tmp_info, weight);
 }
 extern "C" bool remove_prx(void* p, const char *content){
     Next* root = (Next *)p;
@@ -1389,10 +1663,11 @@ extern "C" PyObject * get_phrase_prefix_infos_prx(void *p, const char *content){
     PyGILState_Release(gstate);
     return oplist;
 }
-extern "C" PyObject * get_phrase_suffix_infos_prx(void *p, const char *content, int c_limit=-1, int d_limit=-1){
+extern "C" PyObject * get_phrase_suffix_infos_prx(void *p, const char *content, int c_limit=(1<<30), int d_limit=(1<<30)){
     Next* root = (Next *)p;
     vector<ResInfo *> res_list; res_list.clear();
     get_content_suffix_phrases(root, content, res_list, c_limit, d_limit);
+    cout<<res_list.size()<<endl;
 
     PyGILState_STATE gstate = PyGILState_Ensure();
     PyObject *oplist = PyList_New(res_list.size());
@@ -1401,7 +1676,7 @@ extern "C" PyObject * get_phrase_suffix_infos_prx(void *p, const char *content, 
         assert(PyTuple_Check(pTuple));
         assert(PyTuple_Size(pTuple) == 3);
         PyTuple_SetItem(pTuple, 0, Py_BuildValue("s", res_list[j]->phrase.c_str()));
-        PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->position));
+        PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->weight));
         if(res_list[j]->oinfo->type == 0){
             Py_INCREF((PyObject *)res_list[j]->oinfo->p);
             PyTuple_SetItem(pTuple, 2, Py_BuildValue("N", (PyObject *)res_list[j]->oinfo->p));
@@ -1422,7 +1697,7 @@ extern "C" int get_phrase_suffix_count_prx(void *p, const char *content){
     vector<ResInfo *> res_list; res_list.clear();
     return get_content_suffix_count(root, content, res_list);
 }
-extern "C" PyObject * get_lcp_suffix_infos_prx(void *p, const char *content, int c_limit=-1, int d_limit=-1){
+extern "C" PyObject * get_lcp_suffix_infos_prx(void *p, const char *content, int c_limit=(1<<30), int d_limit=(1<<30)){
     Next* root = (Next *)p;
     vector<ResInfo *> res_list; res_list.clear();
     get_lcp_suffix_infos(root, content, res_list, c_limit, d_limit);
@@ -1434,7 +1709,7 @@ extern "C" PyObject * get_lcp_suffix_infos_prx(void *p, const char *content, int
         assert(PyTuple_Check(pTuple));
         assert(PyTuple_Size(pTuple) == 3);
         PyTuple_SetItem(pTuple, 0, Py_BuildValue("s", res_list[j]->phrase.c_str()));
-        PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->position));
+        PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->weight));
         if(res_list[j]->oinfo->type == 0){
             Py_INCREF((PyObject *)res_list[j]->oinfo->p);
             PyTuple_SetItem(pTuple, 2, Py_BuildValue("N", (PyObject *)res_list[j]->oinfo->p));
@@ -1596,7 +1871,7 @@ PyMODINIT_FUNC initLD(void) {
 }
 */
 
-// g++ -fPIC token2map.cpp -I/usr/local/app/service/virtualenvs/NLP/include/python2.7 -shared -o token2map_lib.so
+// g++ -fPIC token2sug.cpp -I/usr/local/app/service/virtualenvs/NLP/include/python2.7 -shared -o token2sug_lib.so
 int main(){
     while(true){
         Next *root = get_root();

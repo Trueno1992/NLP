@@ -9,14 +9,14 @@ import ctypes
 import datetime
 from ctypes import c_char_p, c_int, c_float, c_double, c_bool, c_void_p, py_object, byref
 
-LID = ctypes.CDLL('%s/token2map_lib.so' % '.')
+LID = ctypes.CDLL('%s/token2sug_lib.so' % '.')
 
 LID.get_root_prx.argtypes = []
 LID.get_root_prx.restype = c_void_p
 
 LID.free_root_prx.argtypes = [c_void_p]
 
-LID.insert_prx.argtypes = [c_void_p, c_char_p, py_object]
+LID.insert_prx.argtypes = [c_void_p, c_char_p, py_object, c_int]
 LID.insert_prx.restype = c_bool
 
 LID.remove_prx.argtypes = [c_void_p, c_char_p]
@@ -66,12 +66,12 @@ class Tree(object):
         """
         self.root = LID.get_root_prx()
 
-    def insert(self, content, oinfo):
+    def insert(self, content, weight, oinfo=None):
         """ pass
         """
         if not isinstance(content, str):
             content = content.encode('utf8')
-        return LID.insert_prx(self.root, content, oinfo)
+        return LID.insert_prx(self.root, content, oinfo, weight)
 
     def remove(self, content):
         """ pass
@@ -173,14 +173,21 @@ if __name__ == '__main__':
     while True:
         root = Tree()
         a = {'22': '33'}
-        root.insert('23', a)
-        root.insert('222', a)
-        root.insert('22', a)
-        root.insert('224', a)
-        root.insert('229', a)
-        root.insert('221', a)
-        root.insert('21', a)
-        root.insert('29', a)
+        #root.insert('23', a, 1)
+        root.insert('222', a, 2)
+        #root.insert('22', a, 3)
+        root.insert('224', a, 4)
+        root.insert('229', a, 5)
+        root.insert('221', a, 6)
+        root.insert('228', 8, 8)
+        root.insert('226', 9, 8)
+        root.insert('227', 10, 8)
+        #root.insert('21', a, 7)
+        #root.insert('29', a, 8)
+        #root.insert('239', a, 10)
+        #root.insert('219', a, 70)
+        #root.insert('25', a, 11)
+        for k in root.get_lcp_suffix('220', 3):print k
         import pdb
         pdb.set_trace()
         print  root.get_kv('2')
