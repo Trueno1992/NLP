@@ -9,7 +9,7 @@ import ctypes
 import datetime
 from ctypes import c_char_p, c_int, c_float, c_double, c_bool, c_void_p, py_object, byref
 
-LID = ctypes.CDLL('%s/token2sug_lib.so' % '.')
+LID = ctypes.CDLL('%s/suggest_lib.so' % '.')
 
 LID.get_root_prx.argtypes = []
 LID.get_root_prx.restype = c_void_p
@@ -21,12 +21,6 @@ LID.insert_prx.restype = c_bool
 
 LID.remove_prx.argtypes = [c_void_p, c_char_p]
 LID.remove_prx.restype = c_bool
-
-LID.cutall_prx.argtypes = [c_void_p, c_char_p]
-LID.cutall_prx.restype = py_object
-
-LID.getall_prx.argtypes = [c_void_p, c_char_p]
-LID.getall_prx.restype = py_object
 
 LID.get_phrase_prefix_infos_prx.argtypes = [c_void_p, c_char_p]
 LID.get_phrase_prefix_infos_prx.restype = py_object
@@ -48,12 +42,6 @@ LID.exist_phrase_prx.restype = c_bool
 
 LID.get_kv_prx.argtypes = [c_void_p, c_char_p]
 LID.get_kv_prx.restype = py_object 
-
-LID.cutmax_prx.argtypes = [c_void_p, c_char_p]
-LID.cutmax_prx.restype = py_object
-
-LID.get_splited_infos_prx.argtypes = [c_void_p, c_char_p, c_bool]
-LID.get_splited_infos_prx.restype = py_object
 
 LID.test.restype = py_object
 
@@ -94,27 +82,6 @@ class Tree(object):
             content = content.encode('utf8')
         return LID.get_kv_prx(self.root, content)
 
-    def cut_all(self, content):
-        """ pass
-        """
-        if not isinstance(content, str):
-            content = content.encode('utf8')
-        return LID.cutall_prx(self.root, content)
-
-    def cut_max(self, content):
-        """ pass
-        """
-        if not isinstance(content, str):
-            content = content.encode('utf8')
-        return LID.cutmax_prx(self.root, content)
-
-    def get_all(self, content):
-        """ pass
-        """
-        if not isinstance(content, str):
-            content = content.encode('utf8')
-        return LID.getall_prx(self.root, content)
-
     def get_prefix(self, content):
         """ pass
         """
@@ -149,13 +116,6 @@ class Tree(object):
         if not isinstance(content, str):
             content = content.encode('utf8')
         return LID.get_lcp_suffix_count_prx(self.root, content)
-
-    def get_split(self, content, save_spliter=False):
-        """ pass
-        """
-        if not isinstance(content, str):
-            content = content.encode('utf8')
-        return LID.get_splited_infos_prx(self.root, content, save_spliter)
 
     def free_root(self):
         """ pass

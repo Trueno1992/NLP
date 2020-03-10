@@ -13,41 +13,6 @@
 
 using namespace std;
 
-/*
-PyObject* PyList_New(int size)
-{
-    PyListObject *op;
-    size_t nbytes;
-
-
-    nbytes = size * sizeof(PyObject *);
-    // Check for overflow 
-    if (nbytes / sizeof(PyObject *) != (size_t)size)
-        return PyErr_NoMemory();
-
-    //为PyListObject申请空间
-    if (num_free_lists) {
-        //使用缓冲池
-        num_free_lists--;
-        op = free_lists[num_free_lists];
-        _Py_NewReference((PyObject *)op);
-    } else {
-        //缓冲池中没有可用的对象，创建对象
-        op = PyObject_GC_New(PyListObject, &PyList_Type);
-    }
-    //为PyListObject对象中维护的元素列表申请空间
-    if (size <= 0)
-        op->ob_item = NULL;
-    else {
-        op->ob_item = (PyObject **) PyMem_MALLOC(nbytes);
-        memset(op->ob_item, 0, nbytes);
-    }
-    op->ob_size = size;
-    op->allocated = size;
-    _PyObject_GC_TRACK(op);
-    return (PyObject *) op;
-}
-*/
 
 bool Utf8ToUnicode32(const string& str, vector<uint32_t>& vec) {
   uint32_t tmp; vec.clear();
@@ -190,8 +155,7 @@ struct Node_6{
 
 struct Nodes{
     bool is_end;
-    map<uint32_t, Next *> *next_map;
-    map<uint32_t, int> *next_max_wei;
+    map<uint32_t, pair<Next *, int> > *next_map;
     vector<pair<uint32_t, int> > *next_top_wei;
     int weight;
     int in;
@@ -311,7 +275,7 @@ void update_node_next_max_wei(Next *p, int word, int weight){
     Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
     if(p->type == 0){
         pn = (Nodes *)p->next;
-        (*pn->next_max_wei)[word] = weight;
+        (*pn->next_map)[word].second = weight;
         pn->next_top_wei->clear();
     }else if (p->type == 1){
         p1 = (Node_1 *)p->next;
@@ -346,7 +310,7 @@ int get_node_next_max_wei(Next *p, int word){
     Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
     if(p->type == 0){
         pn = (Nodes *)p->next;
-        return (*pn->next_max_wei)[word];
+        return (*pn->next_map)[word].second;
     }else if (p->type == 1){
         p1 = (Node_1 *)p->next;
         if(p1->word == word) return p1->max_wei;
@@ -374,8 +338,8 @@ int get_node_max_weight(Next *p){
     if(p->type == 0){
         pn = (Nodes *)p->next;
         max_weight = max(max_weight, pn->weight);
-        for(map<uint32_t, int>::iterator it = pn->next_max_wei->begin(); it != pn->next_max_wei->end(); it++){
-            max_weight = max(it->second, max_weight);
+        for(map<uint32_t, pair<Next *, int> >::iterator it = pn->next_map->begin(); it != pn->next_map->end(); it++){
+            max_weight = max(it->second.second, max_weight);
         }
     }else if (p->type == 1){
         p1 = (Node_1 *)p->next;
@@ -531,11 +495,9 @@ Node_6 * get_node_6(){
 Nodes * get_nodes(){
     Nodes * new_node = (Nodes *)malloc(sizeof(Nodes));
     new_node->is_end = false;
-    new_node->next_map = new map<uint32_t, Next *>;
-    new_node->next_max_wei = new map<uint32_t, int>;
+    new_node->next_map = new map<uint32_t, pair<Next *, int> >;
     new_node->next_top_wei = new vector<pair<uint32_t, int> >;
     new_node->next_map->clear();
-    new_node->next_max_wei->clear();
     new_node->next_top_wei->clear();
 
     new_node->weight = 0;
@@ -570,7 +532,7 @@ bool insert(Next* root, const char* content, OInfo *oinfo, int weight=0){
     if(!Utf8ToUnicode32(content, candidate_words)) return false;
 
     Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
-    map<uint32_t, Next *>::iterator ik;
+    map<uint32_t, pair<Next *, int> >::iterator ik;
     vector<Next *> vec_path; vec_path.clear();
     for(vector<uint32_t>:: iterator it = candidate_words.begin(); it != candidate_words.end(); it++, dep++){
         //printf("%d, %d\n", p->type, *it);
@@ -580,16 +542,15 @@ bool insert(Next* root, const char* content, OInfo *oinfo, int weight=0){
             pn->in += 1;
             ik = pn->next_map->find(*it);
             if(ik != pn->next_map->end()){
-                parent = &ik->second;
-                p = ik->second;
-                (*pn->next_max_wei)[*it] = max((*pn->next_max_wei)[*it], weight);
+                parent = &ik->second.first;
+                p = ik->second.first;
+                (*pn->next_map)[*it].second = max((*pn->next_map)[*it].second, weight);
             }else{
                 Next * tmp_next = (Next *)malloc(sizeof(Next));
                 tmp_next->next = get_node_1();
                 tmp_next->type = 1;
 
-                (*pn->next_map)[*it] = tmp_next;
-                (*pn->next_max_wei)[*it] = weight;
+                (*pn->next_map)[*it] = make_pair(tmp_next, weight);
                 parent = &tmp_next;
                 p = tmp_next;
             }
@@ -730,11 +691,9 @@ bool insert(Next* root, const char* content, OInfo *oinfo, int weight=0){
                     tt_next->type = 1;
 
                     for(unsigned int i = 0; i < 6; i++){
-                        (*new_node->next_map)[p6->words[i]] = p6->nexts[i];
-                        (*new_node->next_max_wei)[p6->words[i]] = p6->max_wei[i];
+                        (*new_node->next_map)[p6->words[i]] = make_pair(p6->nexts[i], p6->max_wei[i]);
                     }
-                    (*new_node->next_map)[*it] = tt_next;
-                    (*new_node->next_max_wei)[*it] = weight;
+                    (*new_node->next_map)[*it] = make_pair(tt_next, weight);
                     new_node->in = p6->in;
                     new_node->is_end = p6->is_end;
                     new_node->weight = p6->weight;
@@ -783,7 +742,7 @@ bool remove(Next* root, const char* content){
     vector<uint32_t> candidate_words;
     if(!Utf8ToUnicode32(content, candidate_words)) return false;
 
-    map<uint32_t, Next *>::iterator ik; Next* p = root;
+    map<uint32_t, pair<Next *, int> >::iterator ik; Next* p = root;
     vector<Next *> vec_path; vec_path.clear();
     for(vector<uint32_t>::iterator it = candidate_words.begin(); it != candidate_words.end(); it++){
         vec_path.push_back(p);
@@ -792,7 +751,7 @@ bool remove(Next* root, const char* content){
             if(pn->next_map != NULL){
                 ik = pn->next_map->find(*it);
                 if(ik != pn->next_map->end()){
-                    p = ik->second;
+                    p = ik->second.first;
                 }else{
                     return false;
                 }
@@ -872,16 +831,14 @@ ResInfo * get_resinfo(){
     t->weight = 0;
     return t;
 }
-/*
-return: 从当前位置切分的最长切分位置
-*/
+
 int32_t cut_from(Next* root,
                  vector<uint32_t>:: iterator start,
                  vector<uint32_t>:: iterator end,
                  vector<ResInfo *> &res_list,
                  int32_t offset_position=0){
     Next* p = root; Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
-    map<uint32_t, Next *>::iterator ik;
+    map<uint32_t, pair<Next *, int> >::iterator ik;
     string res_str = "";
     int32_t max_position = -1;
     for(vector<uint32_t>:: iterator it = start; it != end; it++, offset_position++){
@@ -893,7 +850,7 @@ int32_t cut_from(Next* root,
             if(ik == pn->next_map->end())return max_position;
 
             Unicode32ToUtf8(*it, res_str);
-            p = ik->second;
+            p = ik->second.first;
             if(get_node_end(p)){
                 ResInfo *res_info = new ResInfo();
                 res_info->phrase = res_str;
@@ -967,99 +924,9 @@ int32_t cut_from(Next* root,
     }
     return max_position;
 }
-
-/*最大切分*/
-int32_t cut_max(Next* root,
-                vector<uint32_t>:: iterator start,
-                vector<uint32_t>:: iterator end,
-                ResInfo * res_info,
-                int32_t offset_position=0){
-    Next* p = root; Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
-    map<uint32_t, Next *>::iterator ik;
-    string res_str = "";
-    int32_t max_position = -1, str_len = 0;
-    for(vector<uint32_t>:: iterator it = start; it != end; it++, offset_position++){
-        //string str = ""; Unicode32ToUtf8(*it, str);
-        //printf("%s ++\n", str.c_str());
-        if (p->type == 0){
-            pn = (Nodes *)p->next;
-            ik = pn->next_map->find(*it);
-            if(ik == pn->next_map->end())return max_position;
-
-            Unicode32ToUtf8(*it, res_str);
-            p = ik->second;
-            str_len += 1;
-            if(get_node_end(p)){
-                res_info->phrase = res_str;
-                res_info->position = offset_position;
-                res_info->phrase_len = str_len;
-                res_info->oinfo = get_node_oinfo(p);
-                max_position = max(max_position, offset_position);
-            }
-        }
-        else if (p->type == 1){
-            p1 = (Node_1 *)p->next;
-            if(p1->word != *it)return max_position;
-
-            Unicode32ToUtf8(*it, res_str);
-            p = p1->next;
-            str_len += 1;
-            if(get_node_end(p)){
-                res_info->phrase = res_str;
-                res_info->position = offset_position;
-                res_info->phrase_len = str_len;
-                res_info->oinfo = get_node_oinfo(p);
-                max_position = max(max_position, offset_position);
-            }
-        }
-        else if (p->type == 3){
-            p3 = (Node_3 *)p->next;
-            bool find = false;
-            for(uint32_t i = 0; i < 3; i++){
-                if(p3->words[i] == *it){
-                    Unicode32ToUtf8(*it, res_str);
-                    p = p3->nexts[i];
-                    str_len += 1;
-
-                    if(get_node_end(p)){
-                        res_info->phrase = res_str.c_str();
-                        res_info->position = offset_position;
-                        res_info->phrase_len = str_len;
-                        res_info->oinfo = get_node_oinfo(p);
-                        max_position = max(max_position, offset_position);
-                    }
-                    find = true;
-                    break;
-                }
-            }
-            if(!find) return max_position;
-        }
-        else if (p->type == 6){
-            p6 = (Node_6 *)p->next;
-            bool find = false;
-            for(uint32_t i = 0; i < 6; i++){
-                if(p6->words[i] == *it){
-                    Unicode32ToUtf8(*it, res_str);
-                    p = p6->nexts[i];
-                    str_len += 1;
-                    if(get_node_end(p)){
-                        res_info->phrase = res_str;
-                        res_info->position = offset_position;
-                        res_info->phrase_len = str_len;
-                        res_info->oinfo = get_node_oinfo(p);
-                        max_position = max(max_position, offset_position);
-                    }
-                    find = true;
-                    break;
-                }
-            }
-            if(!find) return max_position;
-        }
-    }
-    return max_position;
-}
-
-
+/*
+return: 从当前位置切分的最长切分位置
+*/
 struct cmp1 { //从大到小
     template <typename T, typename U>
     bool operator()(T const &left, U const &right) {
@@ -1110,10 +977,10 @@ void get_tree_suffix_phrases(Next * p,
             }
             if (p->type == 0){
                 Nodes* pn = (Nodes *)p->next;
-                if (pn->next_max_wei != NULL && pn->next_top_wei->size() == 0){
-                    for(map<uint32_t, int>::iterator it = pn->next_max_wei->begin(); it != pn->next_max_wei->end(); it++){
-                        if((*pn->next_map)[it->first] != NULL){
-                            pn->next_top_wei->push_back(make_pair(it->first, it->second));
+                if (pn->next_map->size() != 0 && pn->next_top_wei->size() == 0){
+                    for(map<uint32_t, pair<Next *, int> >::iterator it = pn->next_map->begin(); it != pn->next_map->end(); it++){
+                        if(it->second.first != NULL){
+                            pn->next_top_wei->push_back(make_pair(it->first, it->second.second));
                         }
                     }
                     sort(pn->next_top_wei->begin(), pn->next_top_wei->end(), cmp4);
@@ -1124,7 +991,7 @@ void get_tree_suffix_phrases(Next * p,
                     if(result.size() >= c_limit && it->second <= result.top().first.second) break;
                     string tmp_str = res_str; Unicode32ToUtf8(it->first, tmp_str);
                     //cout<<"1"<<" "<<it->second<<" "<<(*pn->next_map).size()<<" "; PrintUnicode(it->first);
-                    queue.push(make_pair(make_pair((*pn->next_map)[it->first], it->second), make_pair(tmp_str, dep + 1)));
+                    queue.push(make_pair(make_pair((*pn->next_map)[it->first].first, it->second), make_pair(tmp_str, dep + 1)));
                     while(queue.size() > c_limit) queue.pop();
                     //cout<<"2"<<endl;
                     if((++j) > c_limit)throw("error sort");
@@ -1183,7 +1050,7 @@ Next * get_phrase_endp(Next* root,
                        vector<uint32_t>:: iterator end
                        ){
     Next* p = root; Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
-    map<uint32_t, Next *>::iterator ik;
+    map<uint32_t, pair<Next *, int> >::iterator ik;
     for(vector<uint32_t>:: iterator it = start; it != end; it++){
         //string str = ""; Unicode32ToUtf8(*it, str);
         //printf("%s ++\n", str.c_str());
@@ -1191,7 +1058,7 @@ Next * get_phrase_endp(Next* root,
             pn = (Nodes *)p->next;
             ik = pn->next_map->find(*it);
             if(ik == pn->next_map->end())return NULL;
-            p = ik->second;
+            p = ik->second.first;
             continue;
         }
         if (p->type == 1){
@@ -1236,7 +1103,7 @@ Next * get_lcp_endp(Next* root,
                    vector<uint32_t>:: iterator end
                    ){
     Next* p = root; Node_1 *p1; Node_3 *p3; Node_6 *p6; Nodes *pn;
-    map<uint32_t, Next *>::iterator ik;
+    map<uint32_t, pair<Next *, int> >::iterator ik;
     for(vector<uint32_t>:: iterator it = start; it != end; it++){
         //string str = ""; Unicode32ToUtf8(*it, str);
         //printf("%s ++\n", str.c_str());
@@ -1245,7 +1112,7 @@ Next * get_lcp_endp(Next* root,
             ik = pn->next_map->find(*it);
             if(ik == pn->next_map->end())return p;
             Unicode32ToUtf8(*it, res_str);
-            p = ik->second;
+            p = ik->second.first;
             continue;
         }
         if (p->type == 1){
@@ -1294,19 +1161,20 @@ void free_tree(Next* p){
     if(p->type == 0){
        pn = (Nodes *)p->next;
         if(pn->next_map != NULL){
-            for(map<uint32_t, Next *>::iterator it=pn->next_map->begin(); it != pn->next_map->end(); it++){
+            for(map<uint32_t, pair<Next *, int> >::iterator it=pn->next_map->begin(); it != pn->next_map->end(); it++){
                 //string str = ""; uint32_t tmp=it->first; Unicode32ToUtf8(tmp, str);
                 //printf("%d, %s---%d-\n", p->type, str.c_str(), pn->next_map->size());
-                free_tree(it->second);
-                free(it->second);
-                it->second = NULL;
+                free_tree(it->second.first);
+                free(it->second.first);
+                it->second.first = NULL;
             }
         }
         if(pn->next_map != NULL)pn->next_map->clear();
-        if(pn->next_max_wei != NULL) pn->next_max_wei->clear();
         if(pn->next_top_wei != NULL) pn->next_top_wei->clear();
         delete pn->next_map;
+        delete pn->next_top_wei;
         pn->next_map = NULL;
+        pn->next_top_wei = NULL;
         if(pn->oinfo != NULL && pn->oinfo->p != NULL){
             if(pn->oinfo->type == 0){
                 PyObject * tmp = (PyObject *)pn->oinfo->p;
@@ -1405,99 +1273,6 @@ Next * get_root(){
     root->type = 1;
     return root;
 }
-void get_content_all(Next* root, const char* content, vector<ResInfo *>& res_list){
-    vector<uint32_t> candidate_words;
-    if(!Utf8ToUnicode32(content, candidate_words)) return;
-    int32_t position = 0; res_list.clear();
-    for(vector<uint32_t>:: iterator it = candidate_words.begin(); it != candidate_words.end(); it++, position++){
-        cut_from(root, it, candidate_words.end(), res_list, position);
-    }
-}
-OInfo global_oinfo = {NULL, -1};
-void cut_content_all(Next* root, const char* content, vector<ResInfo *>& res_list){
-    vector<uint32_t> candidate_words;
-    if(!Utf8ToUnicode32(content, candidate_words)) return;
-    int32_t position = 0, max_position = -1, now_max_position; res_list.clear();
-    for(vector<uint32_t>:: iterator it = candidate_words.begin(); it != candidate_words.end(); it++, position++){
-        now_max_position = cut_from(root, it, candidate_words.end(), res_list, position);
-        if(now_max_position == -1 && max_position < position){
-            ResInfo *res_info = new ResInfo();
-            res_info->phrase = "";
-            Unicode32ToUtf8(*it, res_info->phrase);
-            res_info->position = position;
-            res_info->oinfo = NULL;
-            res_list.push_back(res_info);
-        }
-        max_position = max(max_position, max(position, now_max_position));
-    }
-}
-void cut_content_max(Next* root, const char* content, vector<ResInfo *>& res_list){
-    vector<uint32_t> candidate_words;
-    if(!Utf8ToUnicode32(content, candidate_words)) return;
-    int32_t position = 0, now_max_position; res_list.clear();
-    vector<uint32_t>:: iterator it = candidate_words.begin();
-    while (it != candidate_words.end()){
-        ResInfo * res_info = new ResInfo();
-        now_max_position = cut_max(root, it, candidate_words.end(), res_info, position);
-        if(now_max_position == -1){
-            res_info->phrase = "";
-            Unicode32ToUtf8(*it, res_info->phrase);
-            res_info->position = position;
-            res_info->oinfo = NULL;
-        }else{
-            it += res_info->phrase_len - 1;
-            position = res_info->position; 
-        }
-        res_list.push_back(res_info);
-        it++;
-        position++;
-    }
-}
-void split_content_all(Next* root, const char* content, vector<ResInfo *>& res_list, bool save_spliter=false){
-    vector<uint32_t> candidate_words;
-    if(!Utf8ToUnicode32(content, candidate_words)) return;
-    int32_t position = 0, now_max_position; res_list.clear();
-
-    vector<uint32_t>:: iterator it = candidate_words.begin();
-
-    ResInfo * res_info, *recall_info;
-    res_info = get_resinfo();
-    recall_info = get_resinfo();
-    while (it != candidate_words.end()){
-        now_max_position = cut_max(root, it, candidate_words.end(), recall_info, position);
-        if(now_max_position == -1){
-            Unicode32ToUtf8(*it, res_info->phrase);
-            res_info->position = position;
-            res_info->phrase_len += 1;
-            res_info->oinfo = NULL;
-        }else{
-            it += recall_info->phrase_len - 1;
-            position = recall_info->position; 
-            if(res_info->phrase_len != 0){
-                res_list.push_back(res_info);
-                res_info = get_resinfo();
-            }
-            if(save_spliter){
-                res_list.push_back(recall_info);
-                recall_info = get_resinfo();
-            }else{
-                recall_info->phrase = "";
-                recall_info->position = 0;
-                recall_info->phrase_len = 0;
-                recall_info->oinfo = NULL;
-            }
-        }
-        it++;
-        position++;
-    }
-    delete recall_info;
-    if(res_info->phrase_len == 0){
-        delete res_info;
-    }else{
-        res_list.push_back(res_info);
-    }
-}
-
 void get_content_prefix_phrases(Next* root, const char* content, vector<ResInfo *>& res_list){
     vector<uint32_t> candidate_words; candidate_words.clear();
     if(!Utf8ToUnicode32(content, candidate_words)) return;
@@ -1560,89 +1335,6 @@ extern "C" bool insert_prx(void* p, const char* content, PyObject * oinfo, int w
 extern "C" bool remove_prx(void* p, const char *content){
     Next* root = (Next *)p;
     return remove(root, content);
-}
-extern "C" PyObject * cutall_prx(void* p, const char *content){
-    Next* root = (Next *)p;
-    vector<ResInfo *> res_list; res_list.clear();
-    cut_content_all(root, content, res_list);
-
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    PyObject *oplist = PyList_New(res_list.size());
-    for(uint32_t j = 0; j < res_list.size(); j++){
-        PyObject* pTuple = PyTuple_New(3);
-        assert(PyTuple_Check(pTuple));
-        assert(PyTuple_Size(pTuple) == 3);
-        PyTuple_SetItem(pTuple, 0, Py_BuildValue("s", res_list[j]->phrase.c_str()));
-        PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->position));
-
-        if(res_list[j]->oinfo != NULL && res_list[j]->oinfo->type == 0){
-            Py_INCREF((PyObject *)res_list[j]->oinfo->p);
-            PyTuple_SetItem(pTuple, 2, Py_BuildValue("N", (PyObject *)res_list[j]->oinfo->p));
-        }else if(res_list[j]->oinfo == NULL){
-            Py_INCREF(Py_None);
-            PyTuple_SetItem(pTuple, 2, Py_None);
-        }
-        PyList_SetItem(oplist, j, pTuple);
-        //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
-        delete res_list[j];
-    }
-    PyGILState_Release(gstate);
-    return oplist;
-}
-extern "C" PyObject * cutmax_prx(void* p, const char *content){
-    Next* root = (Next *)p;
-    vector<ResInfo *> res_list; res_list.clear();
-    cut_content_max(root, content, res_list);
-
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    PyObject *oplist = PyList_New(res_list.size());
-    for(uint32_t j = 0; j < res_list.size(); j++){
-        PyObject* pTuple = PyTuple_New(3);
-        assert(PyTuple_Check(pTuple));
-        assert(PyTuple_Size(pTuple) == 3);
-        PyTuple_SetItem(pTuple, 0, Py_BuildValue("s", res_list[j]->phrase.c_str()));
-        PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->position));
-        PyList_SetItem(oplist, j, pTuple);
-        if(res_list[j]->oinfo != NULL && res_list[j]->oinfo->type == 0){
-            Py_INCREF((PyObject *)res_list[j]->oinfo->p);
-            PyTuple_SetItem(pTuple, 2, Py_BuildValue("N", (PyObject *)res_list[j]->oinfo->p));
-        }else if(res_list[j]->oinfo == NULL){
-            Py_INCREF(Py_None);
-            PyTuple_SetItem(pTuple, 2, Py_None);
-        }
-        //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
-        delete res_list[j];
-    }
-    PyGILState_Release(gstate);
-    return oplist;
-}
-
-extern "C" PyObject * getall_prx(void* p, const char *content){
-    Next* root = (Next *)p;
-    vector<ResInfo *> res_list; res_list.clear();
-    get_content_all(root, content, res_list);
-
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    PyObject *oplist = PyList_New(res_list.size());
-    for(uint32_t j = 0; j < res_list.size(); j++){
-        PyObject* pTuple = PyTuple_New(3);
-        assert(PyTuple_Check(pTuple));
-        assert(PyTuple_Size(pTuple) == 3);
-        PyTuple_SetItem(pTuple, 0, Py_BuildValue("s", res_list[j]->phrase.c_str()));
-        PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->position));
-        if(res_list[j]->oinfo->type == 0){
-            Py_INCREF((PyObject *)res_list[j]->oinfo->p);
-            PyTuple_SetItem(pTuple, 2, Py_BuildValue("N", (PyObject *)res_list[j]->oinfo->p));
-        }else if(res_list[j]->oinfo->type == -1){
-            Py_INCREF(Py_None);
-            PyTuple_SetItem(pTuple, 2, Py_None);
-        }
-        PyList_SetItem(oplist, j, pTuple);
-        //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
-        delete res_list[j];
-    }
-    PyGILState_Release(gstate);
-    return oplist;
 }
 extern "C" PyObject * get_phrase_prefix_infos_prx(void *p, const char *content){
     Next* root = (Next *)p;
@@ -1736,36 +1428,6 @@ extern "C" int get_lcp_suffix_count_prx(void *p, const char *content){
     Next* root = (Next *)p;
     vector<ResInfo *> res_list; res_list.clear();
     return get_lcp_suffix_count(root, content, res_list);
-}
-extern "C" PyObject * get_splited_infos_prx(void *p, const char *content, bool save_spliter){
-    Next* root = (Next *)p;
-    vector<ResInfo *> res_list; res_list.clear();
-    split_content_all(root, content, res_list, save_spliter);
-
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    PyObject *oplist = PyList_New(res_list.size());
-    for(uint32_t j = 0; j < res_list.size(); j++){
-        PyObject* pTuple = PyTuple_New(3);
-        assert(PyTuple_Check(pTuple));
-        assert(PyTuple_Size(pTuple) == 3);
-        PyTuple_SetItem(pTuple, 0, Py_BuildValue("s", res_list[j]->phrase.c_str()));
-        PyTuple_SetItem(pTuple, 1, Py_BuildValue("i", res_list[j]->position));
-        if(res_list[j]->oinfo != NULL && res_list[j]->oinfo->type == 0){
-            Py_INCREF((PyObject *)res_list[j]->oinfo->p);
-            PyTuple_SetItem(pTuple, 2, Py_BuildValue("N", (PyObject *)res_list[j]->oinfo->p));
-        }else if(res_list[j]->oinfo == NULL){
-            Py_INCREF(Py_None);
-            PyTuple_SetItem(pTuple, 2, Py_None);
-        }else{
-            throw("unknow ResInfo->type");
-        }
-        PyList_SetItem(oplist, j, pTuple);
-        //printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
-        delete res_list[j];
-    }
-    res_list.clear();
-    PyGILState_Release(gstate);
-    return oplist;
 }
 extern "C" bool exist_phrase_prx(void *p, const char* content){
     Next* root = (Next *)p;
@@ -1878,7 +1540,7 @@ PyMODINIT_FUNC initLD(void) {
 }
 */
 
-// g++ -fPIC token2sug.cpp -I/usr/local/app/service/virtualenvs/NLP/include/python2.7 -shared -o token2sug_lib.so
+// g++ -fPIC suggest.cpp -I/usr/local/app/service/virtualenvs/NLP/include/python2.7 -shared -o suggest_lib.so
 int main(){
     while(true){
         Next *root = get_root(); OInfo *pp[10]; void *tt[10];
@@ -1920,11 +1582,6 @@ int main(){
         cout<<insert(root, "8", NULL)<<endl;
 
         vector<ResInfo *> res_list; res_list.clear();
-        cut_content_all(root, "121", res_list);
-        for(uint32_t j = 0; j < res_list.size(); j++){
-            printf("%s, %d ++++\n", res_list[j]->phrase.c_str(), res_list[j]->position);
-            delete res_list[j];
-        }
         cout<<remove(root, "121")<<endl;
         cout<<remove(root, "124")<<endl;
         cout<<remove(root, "523")<<endl;
@@ -1933,11 +1590,6 @@ int main(){
         cout<<remove(root, "0")<<endl;
 
         res_list.clear();
-        cut_content_all(root, "121", res_list);
-        for(uint32_t j = 0; j < res_list.size(); j++){
-            printf("%s, %d ----\n", res_list[j]->phrase.c_str(), res_list[j]->position);
-            delete res_list[j];
-        }
         cout<<"insert end"<<endl;
         free_tree(root); free(root); root = NULL;
         for(int i = 0; i < 10; i++){
