@@ -1306,7 +1306,11 @@ void free_tree(Next* p){
         if(pn->next_max_wei != NULL) pn->next_max_wei->clear();
         if(pn->next_top_wei != NULL) pn->next_top_wei->clear();
         delete pn->next_map;
+        delete pn->next_max_wei;
+        delete pn->next_top_wei;
         pn->next_map = NULL;
+        pn->next_top_wei = NULL;
+        pn->next_max_wei = NULL;
         if(pn->oinfo != NULL && pn->oinfo->p != NULL){
             if(pn->oinfo->type == 0){
                 PyObject * tmp = (PyObject *)pn->oinfo->p;
