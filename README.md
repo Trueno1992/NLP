@@ -1,5 +1,11 @@
-# NLP
-nlp frequetly useful module function
-edit.cpp 和  Levenshtein.cpp 都是编辑距离的实现文件。虽然python的python-Levenshtein 已经实现了编辑距离，但很多时候我们不仅需要编辑距离，还需要编辑
-所对应的编辑轨迹。所以自己实现了一遍，get_edit_path 可以拿到编辑距离和对应的编辑轨迹，get_edit_dis 可以获取编辑距离，setup.py 可以文件可以在支持python
-用disutils 安装，安装命令 python setup.py install。可以参考test.py进行使用
+suggest.py 实现了基于权重的前缀联想，支持各种api查询
+
+示例：
+ from suggest import Tree
+ root = Tree()
+ root.insert('叶非夜', 20, [])    # 字符串，权重，附加信息
+ root.insert('叶非非', 10, [])
+ root.get_suffix('叶', n)         # 获取以“叶”开头的所有后缀字符串，取top_n（最坏情况时间复杂度 top_n * top_n * 字符长度）
+ root.get_suffix_count(args)      # 只获取数量
+ root.get_lcp_suffix('叶非天', n) # 获取最长公共字符的所有后缀，取top_n
+ root.get_lcp_suffix_count(args) # 只获取数量
