@@ -5,6 +5,7 @@
 #include <vector>
 #include <queue>
 #include <map>
+#include <pthread.h>
 using namespace std;
 
 struct node{
@@ -29,6 +30,9 @@ struct cmp
 };
 
 int main(){
+    pthread_mutex_t *free_local = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t));
+    return 0;
+    /*
     map<int, int> m;
     m[2] = 2;
     m[3] = 3;
@@ -36,6 +40,7 @@ int main(){
     int i = 0;
     if((++i) >= 1) cout<<i<<endl;
     cout<<i<<endl;
+    */
     /*
     priority_queue<pair<pair<int, int>, string>, vector<pair<pair<int, int>, string> >, cmp> queue;
     queue.push(make_pair(make_pair(2, 3), "111"));
