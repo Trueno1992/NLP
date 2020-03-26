@@ -5,15 +5,32 @@
 # include<string.h>
 # include<map>
 # include<vector>
+# include<time.h>
 # include<stdint.h>
 # include<queue>
 # include<algorithm>
 # include<queue>
 # include<utility>
 # include<pthread.h>
+#include <sys/time.h>
 //# include<mutex>
 using namespace std;
 
+string getTodayDate(int add_days=0, string format="%Y-%m-%d %H:%M:%S") {
+    time_t timep;
+    time (&timep);
+    char tmp[64];
+    timep = timep + 3600 * 24 * add_days;
+    strftime(tmp, sizeof(tmp), format.c_str(), localtime(&timep));
+    return tmp;
+}
+
+uint64_t get_micron_second(){
+      struct timeval tv;
+      struct timezone tz;
+      gettimeofday(&tv,&tz);
+      return tv.tv_sec*1000000 +tv.tv_usec;
+}
 
 bool Utf8ToUnicode32(const string& str, vector<uint32_t>& vec) {
   uint32_t tmp; vec.clear();
@@ -118,6 +135,7 @@ struct Tree{
     bool in_update;
     int query_count;
     Next * root;
+    string str;
 };
 struct OInfo{
     void *p;
@@ -532,14 +550,16 @@ bool single_insert(Tree *, const char *, OInfo *, int);
 bool insert(Tree * tree, const char* content, OInfo *oinfo, int weight=0){
     pthread_mutex_lock(tree->up_lock2);
     tree->in_update = true;
-
     pthread_mutex_lock(tree->up_lock);
+
     try{
         while(tree->query_count > 0){
             pthread_cond_wait(tree->up_cond, tree->up_lock);
         }
+        cout<<"000000000001"<<" "<<tree->query_count<<" "<<get_micron_second()<<" "<<time(NULL)<<endl;
         bool res = single_insert(tree, content, oinfo, weight);
         tree->in_update = false;
+        cout<<"000000000002"<<" "<<tree->query_count<<" "<<get_micron_second()<<" "<<time(NULL)<<endl;
         pthread_mutex_unlock(tree->up_lock);
         pthread_mutex_unlock(tree->up_lock2);
         pthread_cond_broadcast(tree->up_cond);
@@ -1329,7 +1349,6 @@ Tree * get_tree(){
 void up_tree_before_query(Tree * tree){
     pthread_mutex_lock(tree->up_lock);
     while(tree->in_update){
-        cout<<"wait insert---------------------"<<endl;
         pthread_cond_wait(tree->up_cond, tree->up_lock);
     }
     tree->query_count += 1;
@@ -1472,7 +1491,7 @@ void * query_thread(void *args){
             cout<<(*it)->phrase<<" "<<(*it)->weight<<endl;
             delete (*it);
         }
-        cout<<endl;
+        cout<<tree->query_count<<" "<<get_micron_second()<<" "<<time(NULL) <<endl;
         sleep(0.1);
         pthread_mutex_unlock(tree->up_lock2);
     }
@@ -1496,6 +1515,7 @@ bool node<T, son_count>::insert(){
 
 // g++ -fPIC -lpthread suggest2.cpp -o suggest2.o
 int main(){
+    /*
     int y = 100;
     node<void *, 5>g;
     node<void *, 5> *k = new node<void *, 5>;
@@ -1506,6 +1526,7 @@ int main(){
     cout<<k->sons[0]<<endl;
     cout<<*((int *)k->oinfo)<<endl;
     return 0;
+    */
     Tree * tree = get_tree();
 
     void *status;
@@ -1526,7 +1547,6 @@ int main(){
     pthread_attr_destroy(&attr);
     for(int i=0; i < 7; i++ ){
         int rec = pthread_join(threads[i], &status);
-
         if(rec){
              cout << "Error:unable to join," << rec << endl;
              exit(-1);
