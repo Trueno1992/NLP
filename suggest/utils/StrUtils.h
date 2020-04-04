@@ -4,9 +4,9 @@
 # include<iostream>
 
 
-bool Utf8ToUnicode32(const std::string &, std::vector<uint32_t> &);
+bool Utf8ToU32(const std::string &, std::vector<uint32_t> &);
 
-void Unicode32ToUtf8(const uint32_t &, std::string &);
+void U32ToUtf8(const uint32_t &, std::string &);
 
 void PrintUnicode(const uint32_t &);
 

@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 
-bool Utf8ToUnicode32(const std::string& str, std::vector<uint32_t>& vec) {
+bool Utf8ToU32(const std::string& str, std::vector<uint32_t>& vec) {
   uint32_t tmp; vec.clear();
   for(size_t i = 0; i < str.size();) {
     if(!(str[i] & 0x80)) { // 0xxxxxxx
@@ -59,7 +59,7 @@ bool Utf8ToUnicode32(const std::string& str, std::vector<uint32_t>& vec) {
 }
 
 
-void Unicode32ToUtf8(const uint32_t &ui, std::string& res) {
+void U32ToUtf8(const uint32_t &ui, std::string& res) {
   if(ui <= 0x7f) {
     res += char(ui);
   } else if(ui <= 0x7ff) {
@@ -79,7 +79,7 @@ void Unicode32ToUtf8(const uint32_t &ui, std::string& res) {
 
 
 void PrintUnicode(const uint32_t &ui) {
-    std::string res = ""; Unicode32ToUtf8(ui, res);
+    std::string res = ""; U32ToUtf8(ui, res);
     std::cout<<res<<std::endl;
 }
 
@@ -87,7 +87,7 @@ void PrintUnicode(const uint32_t &ui) {
 void PrintUString(const std::vector<uint32_t> &vec) {
     std::string res = "";
     for(int i = 0; i < vec.size(); i++){
-        Unicode32ToUtf8(vec[i], res);
+        U32ToUtf8(vec[i], res);
     }
     std::cout<<res<<std::endl;
 }
