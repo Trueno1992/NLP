@@ -34,7 +34,7 @@ public:
     virtual Son<W, T> * get_son(uint32_t)=0;
     virtual Son<W, T> * set_son(uint32_t, W, uint8_t)=0;
     virtual Son<W, T> * gset_son(uint32_t, W, std::vector<uint8_t>&)=0;
-    virtual bool get_node_max_wei(W &)=0;
+    virtual W get_node_max_wei();
 public:
     int32_t in_num;
     bool is_end;
@@ -118,7 +118,7 @@ public:
 
     Son<W, T> * gset_son(uint32_t, W, std::vector<uint8_t> &);
 
-    bool get_node_max_wei(W &);
+    W get_node_max_wei();
 
 public:
     std::map<uint32_t, Son<W, T> * > *son_next_map;
@@ -166,7 +166,7 @@ public:
 
     Son<W, T> * gset_son(uint32_t, W, std::vector<uint8_t>&);
 
-    bool get_node_max_wei(W &);
+    W get_node_max_wei();
 public:
     Son<W, T> **all_son;
     uint32_t *all_word;
@@ -215,9 +215,9 @@ public:
     Son<W, T> * get_endp(std::vector<uint32_t>::iterator, std::vector<uint32_t>::iterator);
     Son<W, T> * get_endp(const char *content);
 
-    void get_suffix_info(const char *, std::vector<ResInfo<W, T> > &, uint32_t);
+    void get_suffix_info(const char *, std::vector<ResInfo<W, T> > &, const uint32_t);
 
-    void get_suffix_info(Son<W, T> *, const char *, std::vector<ResInfo<W, T> > &, uint32_t);
+    void get_suffix_info(Son<W, T> *, const char *, std::vector<ResInfo<W, T> > &, const uint32_t);
 private:
     W max(W a, W b){
         if(a >= b) return a;
@@ -255,15 +255,25 @@ bool Tree<W, T, top_num>::insert(const char *content, W weight, T info, bool for
         son = next_son;
     }
     if(son->node->is_end && !force)return false;
-    for(uint32_t i = 0; i < son_path_vec.size(); i++){
-        son_path_vec[i]->max_wei = this->max(son_path_vec[i]->max_wei, weight);
-        son_path_vec[i]->node->in_num += 1;
-        son_path_vec[i]->node->clear_son_top_wei();
-    }
-    son->node->is_end = true;
     son->node->weight = weight;
-    son->node->in_num += 1;
     son->node->info = info;
+    son->node->clear_son_top_wei();
+    if(!son->node->is_end || weight >= son->node->weight){
+        for(uint32_t i = 0; i < son_path_vec.size(); i++){
+            son_path_vec[i]->max_wei = this->max(son_path_vec[i]->max_wei, weight);
+            son_path_vec[i]->node->in_num += (son->node->is_end? 0: 1);
+            son_path_vec[i]->node->clear_son_top_wei();
+        }
+        son->node->in_num += (son->node->is_end? 0: 1); 
+        son->node->is_end = true;
+    }else{
+        son->max_wei = son->node->get_node_max_wei();
+        for(uint32_t i = son_path_vec.size() - 1; i >= 0; i--){
+            son_path_vec[i]->max_wei = son_path_vec[i]->node->get_node_max_wei();
+            son_path_vec[i]->node->in_num += 0;
+            son_path_vec[i]->node->clear_son_top_wei();
+        }
+    }
 }
 
 template<class W, class T, uint32_t top_num>
@@ -295,9 +305,7 @@ bool Tree<W, T, top_num>::remove(const char *content){
         }
         son_path_vec[i]->max_wei;
         if(son_path_vec[i]->node == NULL) continue;
-        if(!son_path_vec[i]->node->get_node_max_wei(son_path_vec[i]->max_wei)){
-            throw("remove something get error");
-        }
+        son_path_vec[i]->max_wei = son_path_vec[i]->node->get_node_max_wei();
         son_path_vec[i]->node->clear_son_top_wei();
     }
     return true;
@@ -344,18 +352,18 @@ bool cmp3(const std::pair<wtype, W> a, const std::pair<wtype, W> b) {
 template<class W, class T, uint32_t top_num>
 void Tree<W, T, top_num>::get_suffix_info(Son<W, T> *son,
                                           const char * prefix_str,
-                                          std::vector<ResInfo> &res_list,
-                                          int c_limit){
-    priority_queue<std::pair<std::pair<Son<W, T> *, std::string>, int>, std::vector<std::pair<std::pair<Son<W, T> *, string>, int> >, cmp1>queue;
+                                          std::vector<ResInfo<W, T> > &res_list,
+                                          const uint32_t c_limit){
+    std::priority_queue<std::pair<std::pair<Son<W, T> *, std::string>, int>, std::vector<std::pair<std::pair<Son<W, T> *, std::string>, int> >, cmp1>queue;
     while(!queue.empty()) queue.pop();
-    priority_queue<std::pair<std::pair<Son<W, T> *, std::string>, int>, std::vector<std::pair<std::pair<Son<W, T> *, string>, int> >, cmp2>result;
+    std::priority_queue<std::pair<std::pair<Son<W, T> *, std::string>, int>, std::vector<std::pair<std::pair<Son<W, T> *, std::string>, int> >, cmp2>result;
     while(!queue.empty()) queue.pop();
 
-    queue.push(std::make_pair(std::make_pair(son, string(prefix_str)), 0));
+    queue.push(std::make_pair(std::make_pair(son, std::string(prefix_str)), 0));
     std::vector<std::pair<std::pair<Son<W, T> *, std::string>, int> > all_nodes;
     typename std::vector<std::pair<std::pair<Son<W, T> *, std::string>, int> >::iterator node_it;
     typename std::map<uint32_t, Son<W, T> * >::iterator son_it;
-    typename std::vector<pair<uint32_t, W> >::iterator top_it;
+    typename std::vector<std::pair<uint32_t, W> >::iterator top_it;
     while(queue.size()){
         all_nodes.clear();
         while(queue.size()){
@@ -366,8 +374,6 @@ void Tree<W, T, top_num>::get_suffix_info(Son<W, T> *son,
             Son<W, T> * son = node_it->first.first;
             
             W son_max_wei = son->max_wei;
-
-            if(node_it->second > d_limit) continue;
 
             if(result.size() >= c_limit && son_max_wei <= result.top().first.first->node->weight) break;
 
@@ -381,15 +387,15 @@ void Tree<W, T, top_num>::get_suffix_info(Son<W, T> *son,
                 if (nodeMap->son_next_map->size() != 0 && nodeMap->son_top_vec->size() == 0){
                     for(son_it = nodeMap->son_next_map->begin(); son_it != nodeMap->son_next_map->end(); son_it++){
                         if(son_it->second == NULL)continue;
-                        nodeMap->son_top_vec->push_back(make_pair(son_it->first, son_it->second->max_wei));
+                        nodeMap->son_top_vec->push_back(std::make_pair(son_it->first, son_it->second->max_wei));
                     }
-                    sort(nodeMap->next_top_wei->begin(), nodeMap->next_top_wei->end(), cmp3<uint32_t, W>);
+                    sort(nodeMap->son_top_vec->begin(), nodeMap->son_top_vec->end(), cmp3<uint32_t, W>);
                 }
                 int j = 0;
                 for(top_it = nodeMap->son_top_vec->begin(); top_it != nodeMap->son_top_vec->end(); top_it++){
                     if(queue.size() >= c_limit && top_it->second <= queue.top().first.first->max_wei) break;
                     if(result.size() >= c_limit && top_it->second <= result.top().first.first->node->weight) break;
-                    std::string tmp_str = node_it->first->second; U32ToUtf8(top_it->first, tmp_str);
+                    std::string tmp_str = node_it->first.second; U32ToUtf8(top_it->first, tmp_str);
                     queue.push(std::make_pair(std::make_pair((*nodeMap->son_next_map)[top_it->first], tmp_str), node_it->second + 1));
                     while(queue.size() > c_limit) queue.pop();
                     if((++j) > c_limit)throw("error sort");
@@ -399,8 +405,8 @@ void Tree<W, T, top_num>::get_suffix_info(Son<W, T> *son,
                 for(uint32_t i = 0; i < nodeArr->son_num; i++){
                     if(queue.size() >= c_limit && nodeArr->all_son[i]->max_wei <= queue.top().first.first->max_wei) continue;
                     if(result.size() >= c_limit && nodeArr->all_son[i]->max_wei <= result.top().first.first->node->weight) continue;
-                    std::string tmp_str = node_it->first->second; U32ToUtf8(nodeArr->all_word[i], tmp_str);
-                    queue.push(std::make_pair(std::make_pair(all_son[i], tmp_str), node_it->second + 1));
+                    std::string tmp_str = node_it->first.second; U32ToUtf8(nodeArr->all_word[i], tmp_str);
+                    queue.push(std::make_pair(std::make_pair(nodeArr->all_son[i], tmp_str), node_it->second + 1));
                     while(queue.size() > c_limit) queue.pop();
                 }
             }
@@ -410,18 +416,20 @@ void Tree<W, T, top_num>::get_suffix_info(Son<W, T> *son,
     }
     while(result.size() > c_limit) result.pop();
     while(result.size() != 0){
-        std::pair<std::pair<Son<W, T> *, string>, int> > tmp = result.top();
-        ResInfo res_info;
+        std::pair<std::pair<Son<W, T> *, std::string>, int> tmp = result.top();
+        ResInfo<W, T> res_info;
         res_info.phrase = tmp.first.second;
         res_info.weight = tmp.first.first->node->weight;
-        res_info.info = tmp->first.first->node->info
+        res_info.info   = tmp.first.first->node->info;
         res_list.push_back(res_info);
         result.pop();
     }
     reverse(res_list.begin(), res_list.end());
 }
 template<class W, class T, uint32_t top_num>
-void Tree<W, T, top_num>::get_suffix_info(const char * content, std::vector<ResInfo> &res_list, int c_limit){
+void Tree<W, T, top_num>::get_suffix_info(const char * content,
+                                          std::vector<ResInfo<W, T> > &res_list,
+                                          const uint32_t c_limit){
     Son<W, T> *son = this->get_endp(content);
     if(son == NULL) return;
     this->get_suffix_info(son, content, res_list, c_limit);
@@ -475,8 +483,9 @@ bool NodeArr<W, T>::resize(std::vector<uint8_t> &arrLen_vec){
     }
     return false;
 }
-bool NodeArr<W, T>::get_node_max_wei(W &w){
-    bool find = false;
+template<class W, class T>
+W NodeArr<W, T>::get_node_max_wei(){
+    bool find = false; W w;
     if(this->is_end){
         w = this->weight;
         find = true;
@@ -489,7 +498,7 @@ bool NodeArr<W, T>::get_node_max_wei(W &w){
             }
         }
     }
-    return find;
+    return w;
 }
 template<class W, class T>
 Son<W, T> * NodeArr<W, T>::get_son(uint32_t word){
@@ -549,22 +558,20 @@ Son<W, T> * NodeMap<W, T>::gset_son(uint32_t word, W w, std::vector<uint8_t> &ar
     return this->set_son(word, w, arrLen_vec[0]);
 }
 template<class W, class T>
-bool NodeMap<W, T>::get_node_max_wei(W &w){
-    bool find = false;
+W NodeMap<W, T>::get_node_max_wei(){
+    bool find = false; W w;
     if(this->is_end){
         w = this->weight;
         find = true;
     }
     typename std::map<uint32_t, Son<W, T> * >::iterator son_it;
-    if(this->son_next_map != NULL){
-        for(son_it = this->son_next_map->begin(); son_it != this->son_next_map->end(); ++son_it){
-            if(son_it->second == NULL) continue;
-            if(!find || w < son_it->second->max_wei){
-                w = son_it->second->max_wei;
-                find = true;
-            }
+    for(son_it = this->son_next_map->begin(); son_it != this->son_next_map->end(); ++son_it){
+        if(son_it->second == NULL) continue;
+        if(!find || son_it->second->max_wei > w){
+            w = son_it->second->max_wei;
+            find = true;
         }
     }
-    return find;
+    return w;
 }
 #endif
