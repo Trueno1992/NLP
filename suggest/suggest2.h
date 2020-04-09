@@ -41,6 +41,7 @@ public:
     virtual Son<W, T> * set_son(uint32_t, W, uint8_t)=0;
     virtual Son<W, T> * gset_son(uint32_t, W, std::vector<uint8_t>&)=0;
     virtual W get_node_max_wei()=0;
+    virtual ~Node(){};
 public:
     int32_t in_num;
     bool is_end;
@@ -66,20 +67,25 @@ public:
     }
     ~Son(){
         if(this->node == NULL) return;
+        /*
         if(this->is_arr){
             delete (NodeArr<W, T> *)this->node;
         }else{
             delete (NodeMap<W, T> *)this->node;
         }
+        */
+        delete this->node;
         this->node = NULL;
     }
     void release_son(){
         if(this->node == NULL) return;
-        if(this->is_arr){
+        /*if(this->is_arr){
             delete (NodeArr<W, T> *)this->node;
         }else{
             delete (NodeMap<W, T> *)this->node;
         }
+        */
+        delete this->node;
         this->node = NULL;
     }
 public:
@@ -107,6 +113,7 @@ public:
          }
     }
     ~NodeMap(){
+        //std::cout<<"delete mapnode"<<std::endl; 
         if(this->son_next_map != NULL){
             typename std::map<uint32_t, Son<W, T> * >::iterator it;
             for(it=this->son_next_map->begin(); it != this->son_next_map->end(); ++it){
@@ -156,6 +163,7 @@ public:
         }
     }
     ~NodeArr(){
+        //std::cout<<"delete arrnode"<<std::endl; 
         if(this->all_son != NULL){
             for(int32_t i = 0; i < this->son_num; i++){
                 if(this->all_son[i] == NULL) continue;
@@ -209,29 +217,18 @@ public:
             this->arrLen_vec.push_back(3);
             this->arrLen_vec.push_back(6);
         }
-        this->write_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-        this->query_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-        this->qw_cond = (pthread_cond_t  *)malloc(sizeof(pthread_cond_t)); 
-
-        pthread_mutex_init(this->write_lock, NULL);
-        pthread_cond_init(this->qw_cond, NULL);
-
         this->root = new Son<W, T>();
-
-        this->query_count = 0;
-        this->in_update = false;
     }
     ~Tree(){
-        free(this->write_lock);
-        free(this->query_lock);
-        free(this->qw_cond);
         delete this->root;
         this->root = NULL;
         this->arrLen_vec.clear();
+        //std::cout<<"delete tree"<<std::endl;
     }
 
     bool insert(const char *, W, T, bool);
     bool remove(const char *);
+    T * get_info(const char *);
     uint32_t get_suffix_count(const char *);
     void get_suffix_info(const char *, std::vector<ResInfo<W, T> > &, const uint32_t);
 
@@ -239,15 +236,37 @@ public:
     Son<W, T> * get_endp(std::vector<uint32_t>::iterator, std::vector<uint32_t>::iterator);
     void get_suffix_info(Son<W, T> *, const char *, std::vector<ResInfo<W, T> > &, const uint32_t);
     NodeMap<W, T> * arr2map(NodeArr<W, T> *);
+    Son<W, T> *root;
+private:
+
+public:
+    std::vector<uint8_t> arrLen_vec;
+};
+
+template<class W, class T, uint32_t top_num> class ConcurrentTree: public Tree<W, T, top_num>{
+public:
+    ConcurrentTree(std::vector<uint8_t> *arrLen_init_vec): Tree<W, T, top_num>(arrLen_init_vec){
+        this->write_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+        this->query_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+        this->qw_cond = (pthread_cond_t  *)malloc(sizeof(pthread_cond_t)); 
+
+        pthread_mutex_init(this->write_lock, NULL);
+        pthread_cond_init(this->qw_cond, NULL);
+
+        this->query_count = 0;
+        this->in_update = false;
+    }
+    ~ConcurrentTree(){
+        free(this->write_lock);
+        free(this->query_lock);
+        free(this->qw_cond);
+        //std::cout<<"delete concurrentTree"<<std::endl;
+    }
     pthread_mutex_t *write_lock;
     pthread_mutex_t *query_lock;
     pthread_cond_t  *qw_cond;
     bool in_update;
     int32_t query_count;
-    Son<W, T> *root;
-private:
-public:
-    std::vector<uint8_t> arrLen_vec;
 };
 
 template<class W, class T, uint32_t top_num>
@@ -259,7 +278,7 @@ bool Tree<W, T, top_num>::insert(const char *content, W weight, T info, bool for
     Son<W, T> * son = this->root; Son<W, T> * next_son = NULL;
 
     std::vector<uint32_t> vec_words; vec_words.clear();
-    if(!Utf8ToU32(content, vec_words) || vec_words.size() == 0) return false;
+    if(!Utf8ToU32(content, vec_words)) return false;
 
     std::vector<Son<W, T> *> son_path_vec; son_path_vec.clear();
     for(std::vector<uint32_t>::iterator word_it = vec_words.begin(); word_it != vec_words.end(); word_it++){ 
@@ -300,7 +319,7 @@ bool Tree<W, T, top_num>::remove(const char *content){
     Son<W, T> * son = this->root; Son<W, T> *next_son = NULL;
 
     std::vector<uint32_t> vec_words;
-    if(!Utf8ToU32(content, vec_words) || vec_words.size() == 0) return false;
+    if(!Utf8ToU32(content, vec_words)) return false;
 
     std::vector<std::pair<Son<W, T> *, uint32_t> > son_path_vec; son_path_vec.clear();
     son_path_vec.push_back(std::make_pair(son, 0));
@@ -343,7 +362,7 @@ Son<W, T> * Tree<W, T, top_num>::get_endp(std::vector<uint32_t>:: iterator start
 template<class W, class T, uint32_t top_num>
 Son<W, T> * Tree<W, T, top_num>::get_endp(const char *content){
     std::vector<uint32_t> candidate_words;
-    if(!Utf8ToU32(content, candidate_words) || candidate_words.size() == 0) return NULL;
+    if(!Utf8ToU32(content, candidate_words)) return NULL;
     return this->get_endp(candidate_words.begin(), candidate_words.end());
 }
 struct cmp1 {//从小到大
@@ -457,6 +476,13 @@ uint32_t Tree<W, T, top_num>::get_suffix_count(const char *content){
     Son<W, T> *son = this->get_endp(content);
     if(son == NULL) return 0;
     return son->node->in_num;
+}
+template<class W, class T, uint32_t top_num>
+T * Tree<W, T, top_num>::get_info(const char *content){
+    if(this->root->node == NULL) return 0;
+    Son<W, T> *son = this->get_endp(content);
+    if(son == NULL) return NULL;
+    return &(son->node->info);
 }
 template<class W, class T, uint32_t top_num>
 NodeMap<W, T> * Tree<W, T, top_num>::arr2map(NodeArr<W, T> *arrNode){
