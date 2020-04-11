@@ -5,8 +5,9 @@
 #include <stdlib.h>
 
 
-bool Utf8ToU32(const std::string& str, std::vector<uint32_t>& vec) {
-  uint32_t tmp; vec.clear();
+bool Utf8ToU32(const std::string& str, std::vector<uint32_t>& vec, bool append=false) {
+  uint32_t tmp;
+  if(!append)vec.clear();
   for(size_t i = 0; i < str.size();) {
     if(!(str[i] & 0x80)) { // 0xxxxxxx
       // 7bit, total 7bit
@@ -59,7 +60,8 @@ bool Utf8ToU32(const std::string& str, std::vector<uint32_t>& vec) {
 }
 
 
-void U32ToUtf8(const uint32_t &ui, std::string& res) {
+void U32ToUtf8(const uint32_t &ui, std::string& res, bool append=false) {
+  if(!append) res.clear();
   if(ui <= 0x7f) {
     res += char(ui);
   } else if(ui <= 0x7ff) {
@@ -77,9 +79,18 @@ void U32ToUtf8(const uint32_t &ui, std::string& res) {
   }
 }
 
+void U32ToUtf8(std::vector<uint32_t>::iterator begin,
+               std::vector<uint32_t>::iterator end,
+               std::string& res,
+               bool append=false) {
+    if(!append) res.clear();
+    for(std::vector<uint32_t>::iterator it = begin; it != end; it++){
+        U32ToUtf8(*it, res, true);
+    }
+}
 
 void PrintUnicode(const uint32_t &ui) {
-    std::string res = ""; U32ToUtf8(ui, res);
+    std::string res; U32ToUtf8(ui, res);
     std::cout<<res<<std::endl;
 }
 
