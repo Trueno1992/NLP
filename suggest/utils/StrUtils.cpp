@@ -2,10 +2,13 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <sstream> 
+#include <time.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
 
-bool Utf8ToU32(const std::string& str, std::vector<uint32_t>& vec, bool append=false) {
+bool Utf8ToU32(const std::string& str, std::vector<uint32_t>& vec, bool append) {
   uint32_t tmp;
   if(!append)vec.clear();
   for(size_t i = 0; i < str.size();) {
@@ -60,7 +63,7 @@ bool Utf8ToU32(const std::string& str, std::vector<uint32_t>& vec, bool append=f
 }
 
 
-void U32ToUtf8(const uint32_t &ui, std::string& res, bool append=false) {
+void U32ToUtf8(const uint32_t &ui, std::string& res, bool append) {
   if(!append) res.clear();
   if(ui <= 0x7f) {
     res += char(ui);
@@ -82,15 +85,24 @@ void U32ToUtf8(const uint32_t &ui, std::string& res, bool append=false) {
 void U32ToUtf8(std::vector<uint32_t>::iterator begin,
                std::vector<uint32_t>::iterator end,
                std::string& res,
-               bool append=false) {
+               bool append) {
     if(!append) res.clear();
     for(std::vector<uint32_t>::iterator it = begin; it != end; it++){
         U32ToUtf8(*it, res, true);
     }
 }
 
+uint32_t getU32len(const char * content){
+    std::vector<uint32_t> vec;
+    if(Utf8ToU32(content, vec, false)){
+        return vec.size();
+    }
+    return 0;
+}
+
 void PrintUnicode(const uint32_t &ui) {
-    std::string res; U32ToUtf8(ui, res);
+    std::string res;
+    U32ToUtf8(ui, res, false);
     std::cout<<res<<std::endl;
 }
 
@@ -98,7 +110,7 @@ void PrintUnicode(const uint32_t &ui) {
 void PrintUString(const std::vector<uint32_t> &vec) {
     std::string res = "";
     for(int i = 0; i < vec.size(); i++){
-        U32ToUtf8(vec[i], res);
+        U32ToUtf8(vec[i], res, true);
     }
     std::cout<<res<<std::endl;
 }
@@ -114,4 +126,25 @@ char * get_random_str(int len){
     }
     p[len] = '\0';
     return p;
+}
+
+std::string toString(int i){
+    std::stringstream ss; ss<<i; 
+    return ss.str();
+}
+
+std::string getTodayDate(int add_days, std::string format){
+    time_t timep;
+    time (&timep);
+    char tmp[64];
+    timep = timep + 3600 * 24 * add_days;
+    strftime(tmp, sizeof(tmp), format.c_str(), localtime(&timep));
+    return tmp;
+}
+
+uint64_t get_micron_second(){
+    struct timeval tv;
+    struct timezone tz;
+    gettimeofday(&tv,&tz);
+    return tv.tv_sec*1000000 +tv.tv_usec;
 }
