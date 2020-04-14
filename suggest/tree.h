@@ -345,8 +345,13 @@ public:
     bool get_in_update(){
         return in_update;
     }
-
-public:
+    void lock_query(){
+        pthread_mutex_lock(query_lock);
+    }
+    void unlock_query(){
+        pthread_mutex_unlock(query_lock);
+    }
+private:
     pthread_mutex_t *write_lock;
     pthread_mutex_t *query_lock;
     pthread_cond_t  *qw_cond;
@@ -370,7 +375,7 @@ public:
             return res;
         }catch(...){
             after_collection_update();
-            throw("insert error");
+            throw;
         }
     }
     bool remove(const char * content){
@@ -381,7 +386,7 @@ public:
             return res;
         }catch(...){
             after_collection_update();
-            throw("remove error");
+            throw;
         }
     }
     T * get_info(const char * content){
@@ -392,7 +397,7 @@ public:
             return info;
         }catch(...){
             after_collection_query();
-            throw("get_info error");
+            throw;
         }
     }
     uint32_t get_suffix_count(const char * content){
@@ -403,7 +408,7 @@ public:
             return count;
         }catch(...){
             after_collection_query();
-            throw("get_suffix_count error");
+            throw;
         }
     }
     void get_suffix_info(const char * content,
@@ -414,9 +419,8 @@ public:
             this->Tree<W, T, top_num>::get_suffix_info(content, vec, c_limit);
             after_collection_query();
         }catch(...){
-            std::cout<<this->get_in_update()<<" "<<this->get_query_count()<<std::endl;
             after_collection_query();
-            throw("get_suffix_info error");
+            throw;
         }
     }
     void cut_max(const char * content, std::vector<PTInfo<T> > &vec){
@@ -430,10 +434,10 @@ public:
         }
     }
     void lock_query(){
-        pthread_mutex_lock(query_lock);
+        this->ConcurrentQRLock::lock_query();
     }
     void unlock_query(){
-        pthread_mutex_unlock(query_lock);
+        this->ConcurrentQRLock::unlock_query();
     }
 };
 
@@ -600,7 +604,7 @@ void Tree<W, T, top_num>::get_suffix_info(Son<W, T> *son,
                     std::string tmp_str = node_it->first.second; U32ToUtf8(top_it->first, tmp_str, true);
                     queue.push(std::make_pair(std::make_pair((*nodeMap->son_next_map)[top_it->first], tmp_str), node_it->second + 1));
                     while(queue.size() > c_limit) queue.pop();
-                    if((++j) > c_limit)throw("error sort");
+                    if((++j) > c_limit)throw("get_suffix_info error sort");
                 }
             }else{
                 NodeArr<W, T> * nodeArr = (NodeArr<W, T> *)son->node;

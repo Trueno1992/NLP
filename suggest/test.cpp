@@ -13,7 +13,7 @@
 # include<utility>
 # include<pthread.h>
 # include<StrUtils.h>
-# include<suggest2.h>
+# include<tree.h>
 //# include<mutex>
 using namespace std;
 
@@ -210,28 +210,32 @@ void test_struct_info(){
     delete tree;
 }
 
-void normal_test(){
-    Tree<int, Info> * tree = new Tree<int, Info>();
-    for(int i = 0; i < 10000; i++){
-        Info info(i, i + 100);
-        tree->insert((string("1") + toString(i)).c_str(), i, info);
-        cout<<i<<endl;
-        sleep(1);
-    }
-}
-
 template<class W, class T>
 void * update_thread(void *args){
     ConcurrentTree<W, T> * tree = (ConcurrentTree<W, T> *)args;
     try{
         for(int i = 0; i < 10000; i++){
             Info info(i, i + 100);
-
-            std::vector<PTWInfo<W, T> > res_vec; res_vec.clear();
             tree->insert((string("1") + toString(i)).c_str(), i, info);
 
-            int t = 0; while(t--)tree->get_suffix_info("1", res_vec, 3);
+            std::vector<PTWInfo<W, T> > res_vec; res_vec.clear();
+            int t = 5; while(t--)tree->get_suffix_info("1", res_vec, 3);
+            sleep(1);
+        }
+    }catch(const char *e){
+        cout<<e<<endl;
+        throw;
+    }
+}
+template<class W, class T>
+void * delete_thread(void *args){
+    ConcurrentTree<W, T> * tree = (ConcurrentTree<W, T> *)args;
+    try{
+        for(int i = 0; i < 10000; i++){
+            tree->remove((string("1") + toString(i)).c_str());
 
+            std::vector<PTWInfo<W, T> > res_vec; res_vec.clear();
+            int t = 5; while(t--)tree->get_suffix_info("1", res_vec, 3);
             sleep(1);
         }
     }catch(const char *e){
@@ -246,7 +250,6 @@ void * query_thread(void *args){
         try{
         std::vector<PTWInfo<W, T> > res_vec; res_vec.clear();
         tree->get_suffix_info("1", res_vec, 3);
-        /*
         tree->lock_query();
         for(uint32_t i=0; i <res_vec.size(); i++){
             cout<<"word="   << res_vec[i].word   <<endl;
@@ -256,7 +259,6 @@ void * query_thread(void *args){
         }
         cout<<tree->get_query_count()<<" mic_second="<<get_micron_second()<<" datetime="<<getTodayDate()<<endl;
         tree->unlock_query();
-        */
         sleep(0.1);
         } catch(const char * e){
             cout<<e<<endl;
@@ -277,14 +279,20 @@ void test_concurrentTree_insert(){
     const int ret0 = pthread_create(&threads[0], 0, update_thread<int, Info>, tree);
     const int ret1 = pthread_create(&threads[1], 0, update_thread<int, Info>, tree);
     const int ret2 = pthread_create(&threads[2], 0, update_thread<int, Info>, tree);
+    const int ret3 = pthread_create(&threads[3], 0, update_thread<int, Info>, tree);
 
-    const int ret3 = pthread_create(&threads[3], 0, query_thread<int, Info>, tree);
     const int ret4 = pthread_create(&threads[4], 0, query_thread<int, Info>, tree);
     const int ret5 = pthread_create(&threads[5], 0, query_thread<int, Info>, tree);
     const int ret6 = pthread_create(&threads[6], 0, query_thread<int, Info>, tree);
+    const int ret7 = pthread_create(&threads[7], 0, query_thread<int, Info>, tree);
+
+    const int ret8 = pthread_create(&threads[8], 0, delete_thread<int, Info>, tree);
+    const int ret9 = pthread_create(&threads[9], 0, delete_thread<int, Info>, tree);
+    const int ret10= pthread_create(&threads[10],0, delete_thread<int, Info>, tree);
+    const int ret11= pthread_create(&threads[11],0, delete_thread<int, Info>, tree);
 
     void *status; pthread_attr_destroy(&attr);
-    for(int i = 0; i < 7; i++){
+    for(int i = 0; i < 8; i++){
         int rec = pthread_join(threads[i], &status);
         if(rec){
              cout << "Error:unable to join," << rec << endl;
@@ -296,7 +304,7 @@ void test_concurrentTree_insert(){
 
 
 
-//g++ test.cpp suggest2.h utils/StrUtils.o -o a.out -I./ -I./utils/
+//g++ -lpthread test.cpp tree.h utils/StrUtils.o -o a.out -I./ -I./utils/
 //ps -ef |grep a.out|grep -v grep|awk -F ' ' '{print $2}'|xargs htop -p
 int main(){
     //test_son_memory_release();
@@ -306,7 +314,7 @@ int main(){
     //test_cut_max();
     //test_accuracy_get_suffix_info();
     //test_struct_info();
-    test_concurrentTree_insert();
+    //test_concurrentTree_query();
     //normal_test();
     return 0;
 }
