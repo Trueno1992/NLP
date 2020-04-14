@@ -14,6 +14,11 @@
 # include <algorithm>
 
 
+template<class W> bool a_gt_b(const W &a, const W &b){
+    if(a >= b) return true;
+    return false;
+}
+
 class ConcurrentQRLock;
 template<class T> struct PTInfo;
 template<class W, class T> struct PTWInfo;
@@ -21,15 +26,15 @@ template<class W, class T> class Node;
 template<class W, class T> class Son;
 template<class W, class T> class NodeArr;
 template<class W, class T> class NodeMap;
-template<class W, class T, uint64_t top_num=UINT64_MAX> class ConcurrentTree;
 template<class W, class T, uint64_t top_num=UINT64_MAX> class Tree;
+template<class W, class T, uint64_t top_num=UINT64_MAX> class ConcurrentTree;
+template<class W> class Suggest;
+template<class W> class ConcurrentSuggest;
+class Replacer;
+class ConcurrentReplacer;
+
 template<class W, class T> NodeMap<W, T> * arr2map(NodeArr<W, T> *arrNode);
 
-
-template<class W> W Wmax(W a, W b){
-    if(a > b) return a;
-    return b;
-}
 
 template<class T> struct PTInfo{
     std::string word;
@@ -96,7 +101,7 @@ public:
 
 template<class W, class T> class Son{
 public:
-    Son(){
+    explicit Son(){
         this->node = NULL;
         this->max_wei = NULL;
         this->is_arr = false;
@@ -117,7 +122,7 @@ public:
         this->max_wei = new W(wei);
     }
     bool update_max_wei(const W &wei){
-        if(this->max_wei != NULL && wei > (*this->max_wei)){
+        if(this->max_wei != NULL && wei > *this->max_wei){
             delete this->max_wei;
             this->max_wei = new W(wei);
             return true;
@@ -141,11 +146,11 @@ public:
 
 template<class W, class T> class NodeMap: public Node<W, T>{
 public:
-    NodeMap(): Node<W, T>(){
+    explicit NodeMap(): Node<W, T>(){
         this->son_next_map = NULL;
         this->son_top_vec = NULL;
     }
-    NodeMap(NodeArr<W, T> *nodeArr): Node<W, T>(){
+    explicit NodeMap(NodeArr<W, T> *nodeArr): Node<W, T>(){
          this->weight = nodeArr->weight;
          this->is_end = nodeArr->is_end;
          this->in_num = nodeArr->in_num;
@@ -191,7 +196,7 @@ public:
 
 template<class W, class T> class NodeArr: public Node<W, T>{
 public:
-    NodeArr(uint8_t son_num): Node<W, T>(){
+    explicit NodeArr(uint8_t son_num): Node<W, T>(){
         this->son_num = son_num;
         this->all_son = new Son<W, T>*[son_num];
         this->all_word = new uint32_t[son_num];
@@ -233,7 +238,7 @@ public:
 
 template<class W, class T, uint64_t top_num> class Tree{
 public:
-    Tree(std::vector<uint8_t> *arrLen_init_vec=NULL){
+    explicit Tree(std::vector<uint8_t> *arrLen_init_vec=NULL){
         this->arrLen_vec.clear();
         if(arrLen_init_vec != NULL && arrLen_init_vec->size() != 0){
             if(arrLen_init_vec->size() > 50)throw("vector.size() <= 50 limit?");
@@ -287,7 +292,7 @@ public:
 
 class ConcurrentQRLock{
 public:
-    ConcurrentQRLock(){
+    explicit ConcurrentQRLock(){
         this->write_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
         this->query_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
         this->qw_cond    = (pthread_cond_t  *)malloc(sizeof(pthread_cond_t)); 
@@ -362,7 +367,7 @@ private:
 template<class W, class T, uint64_t top_num>
 class ConcurrentTree: public Tree<W, T, top_num>, public ConcurrentQRLock{
 public:
-    ConcurrentTree(std::vector<uint8_t> *vec=NULL): Tree<W, T, top_num>(vec), ConcurrentQRLock(){
+    explicit ConcurrentTree(std::vector<uint8_t> *vec=NULL): Tree<W, T, top_num>(vec), ConcurrentQRLock(){
     }
     ~ConcurrentTree(){
         //std::cout<<"delete concurrentTree"<<std::endl;
@@ -668,6 +673,7 @@ bool Tree<W, T, top_num>::gen_max_ptinfo(std::vector<uint32_t>::iterator begin,
     ptinfo.info   = NULL;
     ptinfo.len    = 1;
 
+    if(this->root->node == NULL) return false;
     Son<W, T> * son = this->root; int32_t len = 0;
     for(std::vector<uint32_t>::iterator it = begin; it != end; it++){
         Son<W, T> * next = son->node->get_son(*it);
@@ -683,7 +689,6 @@ bool Tree<W, T, top_num>::gen_max_ptinfo(std::vector<uint32_t>::iterator begin,
 }
 template<class W, class T, uint64_t top_num>
 void Tree<W, T, top_num>::cut_max(const char *content, std::vector<PTInfo<T> > &res){
-    if(this->root->node == NULL) return;
 
     std::vector<uint32_t> vec_words;
     if(!Utf8ToU32(content, vec_words)) return;
@@ -856,4 +861,71 @@ W * NodeMap<W, T>::get_node_max_wei(){
     if(w == NULL) throw("NodeMap<W, T>::get_node_max_wei w == NULL error");
     return w;
 }
+
+class Replacer: public Tree<bool, std::string>{
+public:
+    explicit Replacer(std::vector<uint8_t> *vec=NULL): Tree(vec){
+    }
+
+    ~Replacer(){
+        //std::cout<<"delete concurrentTree"<<std::endl;
+    }
+
+    bool insert(const char *key, const char *val, bool force=false){
+        return this->Tree::insert(key, false, val, force);
+    }
+
+    std::string replace(const char * content){
+        std::vector<PTInfo<std::string> > res_vec; res_vec.clear();
+        this->Tree::cut_max(content, res_vec);
+
+        std::string res_str = "";
+        for(int i = 0; i < res_vec.size(); i++){
+            res_str += (res_vec[i].info == NULL? res_vec[i].word: (*res_vec[i].info));
+        }
+        return res_str;
+    }
+};
+class ConcurrentReplacer: public ConcurrentTree<bool, std::string>{
+public:
+    explicit ConcurrentReplacer(std::vector<uint8_t> *vec=NULL): ConcurrentTree(vec){
+    }
+
+    ~ConcurrentReplacer(){
+        //std::cout<<"delete concurrentTree"<<std::endl;
+    }
+
+    bool insert(const char *key, const char *val, bool force=false){
+        return this->ConcurrentTree::insert(key, false, val, force);
+    }
+
+    std::string replace(const char * content){
+        std::vector<PTInfo<std::string> > res_vec; res_vec.clear();
+        this->ConcurrentTree::cut_max(content, res_vec);
+
+        std::string res_str = "";
+        for(int i = 0; i < res_vec.size(); i++){
+            res_str += (res_vec[i].info == NULL? res_vec[i].word: (*res_vec[i].info));
+        }
+        return res_str;
+    }
+};
+template<class W>
+class Suggest: public Tree<double, W>{
+public:
+    explicit Suggest(std::vector<uint8_t> *vec=NULL): Tree<double, W>(vec){
+    }
+    ~Suggest(){
+        //std::cout<<"delete concurrentTree"<<std::endl;
+    }
+};
+template<class W>
+class ConcurrentSuggest: public ConcurrentTree<double, W>{
+public:
+    explicit ConcurrentSuggest(std::vector<uint8_t> *vec=NULL): ConcurrentTree<double, W>(vec){
+    }
+    ~ConcurrentSuggest(){
+        //std::cout<<"delete concurrentTree"<<std::endl;
+    }
+};
 #endif
