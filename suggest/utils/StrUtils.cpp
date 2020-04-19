@@ -130,7 +130,8 @@ char * get_random_str(int len){
 
 std::string toString(int i){
     std::stringstream ss; ss<<i; 
-    return ss.str();
+    std::string str = ss.str();
+    return str;
 }
 
 std::string getTodayDate(int add_days, std::string format){

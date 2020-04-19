@@ -86,9 +86,10 @@ void test_strWeight_suffix(){
 }
 
 void test_get_suffix_info(){
+    int num = 100;
     Tree<int, string> *tree = new Tree<int, string>();
-    while(true){
-        int t = 1000; vector<char *> vec; vec.clear();
+    while(num--){
+        int t = 100; vector<char *> vec; vec.clear();
         while(t--){
             char *p = get_random_str((rand() % 50) + 1);
             tree->insert(p, rand() % 1000, "name");
@@ -110,6 +111,7 @@ void test_get_suffix_info(){
         }
         cout<<"suffix_count="<<tree->get_suffix_count("11")<<endl;
     }
+    delete tree; 
 }
 
 void test_cut_max(){
@@ -220,7 +222,8 @@ void * update_thread(void *args){
 
             std::vector<PTWInfo<W, T> > res_vec; res_vec.clear();
             int t = 5; while(t--)tree->get_suffix_info("1", res_vec, 3);
-            sleep(1);
+            sleep(0.1);
+            break;
         }
     }catch(const char *e){
         cout<<e<<endl;
@@ -236,7 +239,8 @@ void * delete_thread(void *args){
 
             std::vector<PTWInfo<W, T> > res_vec; res_vec.clear();
             int t = 5; while(t--)tree->get_suffix_info("1", res_vec, 3);
-            sleep(1);
+            sleep(0.1);
+            break;
         }
     }catch(const char *e){
         cout<<e<<endl;
@@ -248,29 +252,30 @@ void * query_thread(void *args){
     ConcurrentTree<W, T> * tree = (ConcurrentTree<W, T> *)args;
     while(true){
         try{
-        std::vector<PTWInfo<W, T> > res_vec; res_vec.clear();
-        tree->get_suffix_info("1", res_vec, 3);
-        tree->lock_query();
-        for(uint32_t i=0; i <res_vec.size(); i++){
-            cout<<"word="   << res_vec[i].word   <<endl;
-            cout<<"info="   << res_vec[i].info->a<<endl;
-            cout<<"weight=" <<*res_vec[i].weight <<endl;
-            cout<<endl;
-        }
-        cout<<tree->get_query_count()<<" mic_second="<<get_micron_second()<<" datetime="<<getTodayDate()<<endl;
-        tree->unlock_query();
-        sleep(0.1);
+            std::vector<PTWInfo<W, T> > res_vec; res_vec.clear();
+            tree->get_suffix_info("1", res_vec, 3);
+            tree->lock_query();
+            for(uint32_t i=0; i <res_vec.size(); i++){
+                cout<<"word="   << res_vec[i].word   <<endl;
+                cout<<"info="   << res_vec[i].info->a<<endl;
+                cout<<"weight=" <<*res_vec[i].weight <<endl;
+                cout<<endl;
+            }
+            cout<<tree->get_query_count()<<" mic_second="<<get_micron_second()<<" datetime="<<getTodayDate()<<endl;
+            tree->unlock_query();
+            sleep(0.1);
         } catch(const char * e){
             cout<<e<<endl;
             throw;
         }
+        break;
     }
 }
 
 void test_concurrentTree_insert(){
     ConcurrentTree<int, Info> * tree = new ConcurrentTree<int, Info>();
 
-    pthread_t threads[7];
+    pthread_t threads[11];
 
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -291,8 +296,9 @@ void test_concurrentTree_insert(){
     const int ret10= pthread_create(&threads[10],0, delete_thread<int, Info>, tree);
     const int ret11= pthread_create(&threads[11],0, delete_thread<int, Info>, tree);
 
-    void *status; pthread_attr_destroy(&attr);
-    for(int i = 0; i < 8; i++){
+    void *status;
+    pthread_attr_destroy(&attr);
+    for(int i = 0; i < 12; i++){
         int rec = pthread_join(threads[i], &status);
         if(rec){
              cout << "Error:unable to join," << rec << endl;
@@ -300,8 +306,189 @@ void test_concurrentTree_insert(){
         }
         cout << "Main: completed thread id :" << i << "  exiting with status :" << status << endl;
     }
+    delete tree;
+}
+void test_replace(){
+    ConcurrentReplacer replacer;
+    replacer.insert("wulangzhou", "p_lzhouwu");
+    cout<<replacer.replace("wulangzhou哈哈哈")<<endl;
 }
 
+void * update_replace_thread(void *args){
+    ConcurrentReplacer * replacer = (ConcurrentReplacer *)args;
+    try{
+        for(int i = 0; i < 10000; i++){
+            replacer->insert(toString(i).c_str(), toString(i+1).c_str(), true);
+            sleep(1);
+            cout<<"--------------------------------"<<endl;
+        }
+    }catch(const char *e){
+        cout<<e<<endl;
+        throw;
+    }
+}
+void * delete_replace_thread(void *args){
+    ConcurrentReplacer * replacer = (ConcurrentReplacer *)args;
+    try{
+        for(int i = 0; i < 10000; i++){
+            replacer->remove(toString(i).c_str());
+            sleep(1);
+            cout<<"+++++++++++++++++++++++++++++++++"<<endl;
+        }
+    }catch(const char *e){
+        cout<<e<<endl;
+        throw;
+    }
+}
+void * query_replace_thread(void *args){
+    ConcurrentReplacer * replacer = (ConcurrentReplacer *)args;
+    while(true){
+        string content = toString((rand() % 10000000) + 1) + toString((rand() % 10000000) + 1);
+        string res_str = replacer->replace(content.c_str());
+
+        std::vector<std::pair<std::string, std::string> > res; //res.clear();
+        replacer->get_replace_info(content.c_str(), res);
+
+        replacer->lock_query();
+        cout<<content<<endl;
+        cout<<res_str<<endl;
+        for(int i = 0; i < res.size(); i++){
+            cout<<res[i].first<<" "<<res[i].second<<",";
+        }
+        cout<<endl;
+        puts("");
+        replacer->unlock_query();
+        sleep(0.1);
+    }
+}
+void test_concurrent_replace(){
+    ConcurrentReplacer *replacer = new ConcurrentReplacer();
+
+    pthread_t threads[11];
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+    const int ret0 = pthread_create(&threads[0], 0, update_replace_thread, replacer);
+    const int ret1 = pthread_create(&threads[1], 0, update_replace_thread, replacer);
+    const int ret2 = pthread_create(&threads[2], 0, update_replace_thread, replacer);
+    const int ret3 = pthread_create(&threads[3], 0, update_replace_thread, replacer);
+
+    const int ret8 = pthread_create(&threads[8], 0, delete_replace_thread, replacer);
+    const int ret9 = pthread_create(&threads[9], 0, delete_replace_thread, replacer);
+    const int ret10= pthread_create(&threads[10],0, delete_replace_thread, replacer);
+    const int ret11= pthread_create(&threads[11],0, delete_replace_thread, replacer);
+
+    const int ret4 = pthread_create(&threads[4], 0, query_replace_thread, replacer);
+    const int ret5 = pthread_create(&threads[5], 0, query_replace_thread, replacer);
+    const int ret6 = pthread_create(&threads[6], 0, query_replace_thread, replacer);
+    const int ret7 = pthread_create(&threads[7], 0, query_replace_thread, replacer);
+
+    void *status; pthread_attr_destroy(&attr);
+    for(int i = 0; i < 11; i++){
+        int rec = pthread_join(threads[i], &status);
+        if(rec){
+             cout << "Error:unable to join," << rec << endl;
+             exit(-1);
+        }
+        cout << "Main: completed thread id :" << i << "  exiting with status :" << status << endl;
+    }
+
+}
+void * update_map_thread(void *args){
+    ConcurrentMap<string, string> * map = (ConcurrentMap<string, string> *)args;
+    try{
+        for(int i = 0; i < 10000; i++){
+            map->insert(toString(i), toString(i+2));
+            sleep(1);
+            cout<<"--------------------------------"<<endl;
+        }
+    }catch(const char *e){
+        cout<<e<<endl;
+        throw;
+    }
+}
+void * delete_map_thread(void *args){
+    ConcurrentMap<string, string> * map = (ConcurrentMap<string, string> *)args;
+    try{
+        for(int i = 0; i < 10000; i++){
+            map->erase(toString(i));
+            sleep(1);
+            cout<<"+++++++++++++++++++++++++++++++++"<<endl;
+        }
+    }catch(const char *e){
+        cout<<e<<endl;
+        throw;
+    }
+}
+void * query_map_thread(void *args){
+    ConcurrentMap<string, string> * map = (ConcurrentMap<string, string> *)args;
+    while(true){
+        string key = toString(rand() % 100);
+
+        string val = "";
+        bool is_find = map->find(key, val);
+
+        map->lock_query();
+
+        if(is_find)cout<<"key="<<key<<",val="<<val<<endl;
+
+        map->unlock_query();
+        sleep(0.1);
+    }
+}
+void test_concurrent_map(){
+    ConcurrentMap<string, string> *map = new ConcurrentMap<string, string>();
+
+    pthread_t threads[11];
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+    const int ret0 = pthread_create(&threads[0], 0, update_map_thread, map);
+    const int ret1 = pthread_create(&threads[1], 0, update_map_thread, map);
+    const int ret2 = pthread_create(&threads[2], 0, update_map_thread, map);
+    const int ret3 = pthread_create(&threads[3], 0, update_map_thread, map);
+
+    const int ret8 = pthread_create(&threads[8], 0, delete_map_thread, map);
+    const int ret9 = pthread_create(&threads[9], 0, delete_map_thread, map);
+    const int ret10= pthread_create(&threads[10],0, delete_map_thread, map);
+    const int ret11= pthread_create(&threads[11],0, delete_map_thread, map);
+
+    const int ret4 = pthread_create(&threads[4], 0, query_map_thread, map);
+    const int ret5 = pthread_create(&threads[5], 0, query_map_thread, map);
+    const int ret6 = pthread_create(&threads[6], 0, query_map_thread, map);
+    const int ret7 = pthread_create(&threads[7], 0, query_map_thread, map);
+
+    void *status; pthread_attr_destroy(&attr);
+    for(int i = 0; i < 11; i++){
+        int rec = pthread_join(threads[i], &status);
+        if(rec){
+             cout << "Error:unable to join," << rec << endl;
+             exit(-1);
+        }
+        cout << "Main: completed thread id :" << i << "  exiting with status :" << status << endl;
+    }
+
+}
+void normal_test1(){
+    Tree<string, string> *tree = new Tree<string, string>();
+    tree->insert("", "1", "1");
+    vector<PTInfo<string> > vec; vec.clear();
+    tree->cut_max("吴浪舟wulangzhou", vec);
+    for(int i = 0; i < vec.size(); i++){
+        cout<<vec[i].word<<endl;
+        cout<<vec[i].info<<endl;
+    }
+    cout<<endl;
+
+    vector<PTWInfo<string, string> > vec2; vec2.clear();
+    tree->get_suffix_info("", vec2, 5);
+    for(int i = 0; i < vec2.size(); i++){
+        cout<<vec2[i].word<<endl;
+        cout<<*vec2[i].info<<endl;
+    }
+}
 
 
 //g++ -lpthread test.cpp tree.h utils/StrUtils.o -o a.out -I./ -I./utils/
@@ -310,11 +497,14 @@ int main(){
     //test_son_memory_release();
     //test_arr2map();
     //test_strWeight_suffix();
-    //test_get_suffix_info();
+    //while(true) test_get_suffix_info();
     //test_cut_max();
     //test_accuracy_get_suffix_info();
     //test_struct_info();
-    //test_concurrentTree_query();
-    //normal_test();
+    while(true) test_concurrentTree_insert();
+    //while(true)test_replace();
+    //test_concurrent_replace();
+    //normal_test1();
+    //test_concurrent_map();
     return 0;
 }

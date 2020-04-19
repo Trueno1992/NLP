@@ -6,6 +6,7 @@
 # include <stdio.h>
 # include <iostream>
 # include <pthread.h>
+# include <unistd.h>    // sleep
 # include <string.h>
 # include <stdint.h>    // uint32_t
 # include <utility>     // 包含pair
@@ -15,7 +16,7 @@
 
 
 template<class W> bool a_gt_b(const W &a, const W &b){
-    if(a >= b) return true;
+    if(a > b) return true;
     return false;
 }
 
@@ -26,12 +27,13 @@ template<class W, class T> class Node;
 template<class W, class T> class Son;
 template<class W, class T> class NodeArr;
 template<class W, class T> class NodeMap;
-template<class W, class T, uint64_t top_num=UINT64_MAX> class Tree;
-template<class W, class T, uint64_t top_num=UINT64_MAX> class ConcurrentTree;
-template<class W> class Suggest;
-template<class W> class ConcurrentSuggest;
+template<class W, class T, uint64_t top_num=UINT64_MAX, bool (*gt)(const W &, const W &)=a_gt_b> class Tree;
+template<class W, class T, uint64_t top_num=UINT64_MAX, bool (*gt)(const W &, const W &)=a_gt_b> class ConcurrentTree;
+template<class W, class T, uint64_t top_num=UINT64_MAX, bool (*gt)(const W &, const W &)=a_gt_b> class Suggest;
+template<class W, class T, uint64_t top_num=UINT64_MAX, bool (*gt)(const W &, const W &)=a_gt_b> class ConcurrentSuggest;
 class Replacer;
 class ConcurrentReplacer;
+template<class K, class V> class ConcurrentMap;
 
 template<class W, class T> NodeMap<W, T> * arr2map(NodeArr<W, T> *arrNode);
 
@@ -236,7 +238,7 @@ public:
     uint8_t son_num;
 };
 
-template<class W, class T, uint64_t top_num> class Tree{
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)> class Tree{
 public:
     explicit Tree(std::vector<uint8_t> *arrLen_init_vec=NULL){
         this->arrLen_vec.clear();
@@ -256,12 +258,12 @@ public:
         }
         this->root = new Son<W, T>();
     }
-    ~Tree(){
+    virtual ~Tree(){
         delete this->root;
         this->root = NULL;
 
         this->arrLen_vec.clear();
-        //std::cout<<"delete tree"<<std::endl;
+        std::cout<<"delete tree"<<std::endl;
     }
 
 public:
@@ -283,171 +285,15 @@ public:
     Son<W, T> * get_endp(const char *content);
     Son<W, T> * get_endp(std::vector<uint32_t>::iterator begin, std::vector<uint32_t>::iterator end);
     void get_suffix_info(Son<W, T> *, const char *, std::vector<PTWInfo<W, T> > &, const uint32_t);
-
 //private:
 public:
     Son<W, T> *root;
     std::vector<uint8_t> arrLen_vec;
 };
 
-class ConcurrentQRLock{
-public:
-    explicit ConcurrentQRLock(){
-        this->write_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-        this->query_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-        this->qw_cond    = (pthread_cond_t  *)malloc(sizeof(pthread_cond_t)); 
 
-        pthread_mutex_init(this->query_lock, NULL);
-        pthread_mutex_init(this->write_lock, NULL);
-        pthread_cond_init(this->qw_cond, NULL);
-
-        this->query_count = 0;
-        this->in_update = false;
-    }
-    ~ConcurrentQRLock(){
-        //std::cout<<"delete qrlock"<<std::endl;
-        free(this->write_lock);
-        free(this->query_lock);
-        free(this->qw_cond);
-    }
-public:
-    void before_collection_update(){
-        pthread_mutex_lock(write_lock);
-        in_update = true;
-        pthread_mutex_lock(query_lock);
-        while(query_count > 0){
-            pthread_cond_wait(qw_cond, query_lock);
-        }
-    }
-    void after_collection_update(){
-        in_update = false;
-        pthread_mutex_unlock(query_lock);
-        pthread_mutex_unlock(write_lock);
-        pthread_cond_broadcast(qw_cond);
-    }
-
-    void before_collection_query(){
-        pthread_mutex_lock(query_lock);
-        while(in_update){
-            pthread_cond_wait(qw_cond, query_lock);
-        }
-        query_count += 1;
-        pthread_mutex_unlock(query_lock);
-    }
-    void after_collection_query(){
-        pthread_mutex_lock(query_lock);
-        query_count -= 1;
-        if(query_count == 0){
-            pthread_mutex_unlock(query_lock);
-            pthread_cond_broadcast(qw_cond);
-        }else{
-            pthread_mutex_unlock(query_lock);
-        }
-    }
-    uint32_t get_query_count(){
-        return query_count;
-    }
-    bool get_in_update(){
-        return in_update;
-    }
-    void lock_query(){
-        pthread_mutex_lock(query_lock);
-    }
-    void unlock_query(){
-        pthread_mutex_unlock(query_lock);
-    }
-private:
-    pthread_mutex_t *write_lock;
-    pthread_mutex_t *query_lock;
-    pthread_cond_t  *qw_cond;
-    bool in_update;
-    int32_t query_count;
-};
-
-template<class W, class T, uint64_t top_num>
-class ConcurrentTree: public Tree<W, T, top_num>, public ConcurrentQRLock{
-public:
-    explicit ConcurrentTree(std::vector<uint8_t> *vec=NULL): Tree<W, T, top_num>(vec), ConcurrentQRLock(){
-    }
-    ~ConcurrentTree(){
-        //std::cout<<"delete concurrentTree"<<std::endl;
-    }
-    bool insert(const char * content, const W &w, const T &info, bool force=false){
-        before_collection_update();
-        try{
-            bool res = this->Tree<W, T, top_num>::insert(content, w, info, force);
-            after_collection_update();
-            return res;
-        }catch(...){
-            after_collection_update();
-            throw;
-        }
-    }
-    bool remove(const char * content){
-        before_collection_update();
-        try{
-            bool res = this->Tree<W, T, top_num>::remove(content);
-            after_collection_update();
-            return res;
-        }catch(...){
-            after_collection_update();
-            throw;
-        }
-    }
-    T * get_info(const char * content){
-        before_collection_query();
-        try{
-            T * info = this->Tree<W, T, top_num>::get_info(content);
-            after_collection_query();
-            return info;
-        }catch(...){
-            after_collection_query();
-            throw;
-        }
-    }
-    uint32_t get_suffix_count(const char * content){
-        before_collection_query();
-        try{
-            uint32_t count = this->Tree<W, T, top_num>::get_suffix_count(content);
-            after_collection_query();
-            return count;
-        }catch(...){
-            after_collection_query();
-            throw;
-        }
-    }
-    void get_suffix_info(const char * content,
-                         std::vector<PTWInfo<W, T> > &vec,
-                         const uint32_t c_limit){
-        before_collection_query();
-        try{
-            this->Tree<W, T, top_num>::get_suffix_info(content, vec, c_limit);
-            after_collection_query();
-        }catch(...){
-            after_collection_query();
-            throw;
-        }
-    }
-    void cut_max(const char * content, std::vector<PTInfo<T> > &vec){
-        before_collection_query();
-        try{
-            this->Tree<W, T, top_num>::cut_max(content, vec);
-            after_collection_query();
-        }catch(...){
-            after_collection_query();
-            throw("cut_max error");
-        }
-    }
-    void lock_query(){
-        this->ConcurrentQRLock::lock_query();
-    }
-    void unlock_query(){
-        this->ConcurrentQRLock::unlock_query();
-    }
-};
-
-template<class W, class T, uint64_t top_num>
-bool Tree<W, T, top_num>::insert(const char *content, const W &weight, const T &info, bool force=false){
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+bool Tree<W, T, top_num, gt>::insert(const char *content, const W &weight, const T &info, bool force=false){
     if(this->root->node == NULL) this->root->to_arrSon(weight, this->arrLen_vec[0]);
 
     Son<W, T> * son = this->root; Son<W, T> * next = NULL;
@@ -488,9 +334,10 @@ bool Tree<W, T, top_num>::insert(const char *content, const W &weight, const T &
         son->node->in_num += 0; 
     }
     son->node->is_end = true;
+    return true;
 }
-template<class W, class T, uint64_t top_num>
-bool Tree<W, T, top_num>::remove(const char *content){
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+bool Tree<W, T, top_num, gt>::remove(const char *content){
     if(this->root->node == NULL) return true;
     Son<W, T> * son = this->root; Son<W, T> * next = NULL;
 
@@ -523,8 +370,8 @@ bool Tree<W, T, top_num>::remove(const char *content){
     }
     return true;
 }
-template<class W, class T, uint64_t top_num>
-Son<W, T> * Tree<W, T, top_num>::get_endp(std::vector<uint32_t>:: iterator start,
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+Son<W, T> * Tree<W, T, top_num, gt>::get_endp(std::vector<uint32_t>:: iterator start,
                                           std::vector<uint32_t>:: iterator end){
     Son<W, T> *son = this->root;
     for(std::vector<uint32_t>:: iterator it = start; it != end; it++){
@@ -534,8 +381,8 @@ Son<W, T> * Tree<W, T, top_num>::get_endp(std::vector<uint32_t>:: iterator start
     }
     return son;
 }
-template<class W, class T, uint64_t top_num>
-Son<W, T> * Tree<W, T, top_num>::get_endp(const char *content){
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+Son<W, T> * Tree<W, T, top_num, gt>::get_endp(const char *content){
     std::vector<uint32_t> candidate_words;
     if(!Utf8ToU32(content, candidate_words)) return NULL;
     return this->get_endp(candidate_words.begin(), candidate_words.end());
@@ -554,12 +401,14 @@ struct cmp2 {//从小到大
         return false;
     }
 };
-template<class wtype, class W>
-bool cmp3(const std::pair<wtype, W *> a, const std::pair<wtype, W *> b) {
+template<class wtype, class W, bool (*gt)(const W &, const W &)>
+bool cmp4(const std::pair<wtype, W *> &a, const std::pair<wtype, W *> &b) {
+    //return gt(*a.second, *b.second);
     return *a.second > *b.second; // 大的在前
 };
-template<class W, class T, uint64_t top_num>
-void Tree<W, T, top_num>::get_suffix_info(Son<W, T> *son,
+
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+void Tree<W, T, top_num, gt>::get_suffix_info(Son<W, T> *son,
                                           const char * prefix_str,
                                           std::vector<PTWInfo<W, T> > &res_list,
                                           const uint32_t c_limit){
@@ -599,7 +448,7 @@ void Tree<W, T, top_num>::get_suffix_info(Son<W, T> *son,
                         if(son_it->second == NULL)continue;
                         nodeMap->son_top_vec->push_back(std::make_pair(son_it->first, son_it->second->max_wei));
                     }
-                    sort(nodeMap->son_top_vec->begin(), nodeMap->son_top_vec->end(), cmp3<uint32_t, W>);
+                    sort(nodeMap->son_top_vec->begin(), nodeMap->son_top_vec->end(), cmp4<uint32_t, W, gt>);
                 }
                 this->unlock_query();
                 int j = 0;
@@ -640,8 +489,8 @@ void Tree<W, T, top_num>::get_suffix_info(Son<W, T> *son,
     }
     reverse(res_list.begin(), res_list.end());
 }
-template<class W, class T, uint64_t top_num>
-void Tree<W, T, top_num>::get_suffix_info(const char * content,
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+void Tree<W, T, top_num, gt>::get_suffix_info(const char * content,
                                           std::vector<PTWInfo<W, T> > &res_list,
                                           const uint32_t c_limit){
     if(this->root->node == NULL) return;
@@ -649,22 +498,22 @@ void Tree<W, T, top_num>::get_suffix_info(const char * content,
     if(son == NULL) return;
     this->get_suffix_info(son, content, res_list, c_limit);
 }
-template<class W, class T, uint64_t top_num>
-uint32_t Tree<W, T, top_num>::get_suffix_count(const char *content){
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+uint32_t Tree<W, T, top_num, gt>::get_suffix_count(const char *content){
     if(this->root->node == NULL) return 0;
     Son<W, T> *son = this->get_endp(content);
     if(son == NULL) return 0;
     return son->node->in_num;
 }
-template<class W, class T, uint64_t top_num>
-T * Tree<W, T, top_num>::get_info(const char *content){
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+T * Tree<W, T, top_num, gt>::get_info(const char *content){
     if(this->root->node == NULL) return NULL;
     Son<W, T> *son = this->get_endp(content);
     if(son == NULL) return NULL;
     return son->node->info;
 }
-template<class W, class T, uint64_t top_num>
-bool Tree<W, T, top_num>::gen_max_ptinfo(std::vector<uint32_t>::iterator begin,
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+bool Tree<W, T, top_num, gt>::gen_max_ptinfo(std::vector<uint32_t>::iterator begin,
                                          std::vector<uint32_t>::iterator end,
                                          PTInfo<T>  &ptinfo){
     if(begin == end) return false;
@@ -687,8 +536,8 @@ bool Tree<W, T, top_num>::gen_max_ptinfo(std::vector<uint32_t>::iterator begin,
     }
     return true;
 }
-template<class W, class T, uint64_t top_num>
-void Tree<W, T, top_num>::cut_max(const char *content, std::vector<PTInfo<T> > &res){
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+void Tree<W, T, top_num, gt>::cut_max(const char *content, std::vector<PTInfo<T> > &res){
 
     std::vector<uint32_t> vec_words;
     if(!Utf8ToU32(content, vec_words)) return;
@@ -862,13 +711,202 @@ W * NodeMap<W, T>::get_node_max_wei(){
     return w;
 }
 
+
+/*--------------------------------------------------------------------------------------------------------*/
+class ConcurrentQRLock{
+public:
+    explicit ConcurrentQRLock(){
+        this->write_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+        this->query_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+        this->qw_cond    = (pthread_cond_t  *)malloc(sizeof(pthread_cond_t)); 
+
+        pthread_mutex_init(this->query_lock, NULL);
+        pthread_mutex_init(this->write_lock, NULL);
+        pthread_cond_init(this->qw_cond, NULL);
+
+        this->query_count = 0;
+        this->in_update = false;
+    }
+    virtual ~ConcurrentQRLock(){
+        std::cout<<"delete ConcurrentQRLock"<<std::endl;
+        /*没有意义
+        while(this->query_count > 0 || this->in_update){
+            sleep(1);
+            std::cout<<"waiting for (this->query_count == 0 && !this->in_update())"<<std::endl;
+        }
+        */
+
+        // 如果没有join等待线程执行完，则以下的释放会造成内存泄漏
+        while(pthread_mutex_destroy(this->write_lock) != 0){
+            std::cout<<"waiting for pthread_mutex_destroy(this->write_lock)"<<std::endl;
+            sleep(1);
+        }
+        while(pthread_mutex_destroy(this->query_lock) != 0){
+            std::cout<<"waiting for pthread_mutex_destroy(this->query_lock)"<<std::endl;
+            sleep(1);
+        }
+        while(pthread_cond_destroy(this->qw_cond) != 0){
+            std::cout<<"waiting for pthread_cond_destroy(this->qw_cond)"<<std::endl;
+            sleep(1);
+        }
+        free(this->write_lock);
+        free(this->query_lock);
+        free(this->qw_cond);
+    }
+public:
+    void before_collection_update(){
+        pthread_mutex_lock(write_lock);
+        in_update = true;
+        pthread_mutex_lock(query_lock);
+        while(query_count > 0){
+            pthread_cond_wait(qw_cond, query_lock);
+        }
+    }
+    void after_collection_update(){
+        in_update = false;
+        pthread_mutex_unlock(query_lock);
+        pthread_mutex_unlock(write_lock);
+        pthread_cond_broadcast(qw_cond);
+    }
+
+    void before_collection_query(){
+        pthread_mutex_lock(query_lock);
+        while(in_update){
+            pthread_cond_wait(qw_cond, query_lock);
+        }
+        query_count += 1;
+        pthread_mutex_unlock(query_lock);
+    }
+    void after_collection_query(){
+        pthread_mutex_lock(query_lock);
+        query_count -= 1;
+        if(query_count == 0){
+            pthread_mutex_unlock(query_lock);
+            pthread_cond_broadcast(qw_cond);
+        }else{
+            pthread_mutex_unlock(query_lock);
+        }
+    }
+    uint32_t get_query_count(){
+        return query_count;
+    }
+    bool get_in_update(){
+        return in_update;
+    }
+
+    void lock_query(){
+        pthread_mutex_lock(query_lock);
+        this->query_count += 1;
+    }
+    void unlock_query(){
+        this->query_count -= 1;
+        pthread_mutex_unlock(query_lock);
+    }
+    void lock_write(){
+        pthread_mutex_lock(write_lock);
+        this->in_update = true;
+    }
+    void unlock_write(){
+        this->in_update = false;
+        pthread_mutex_unlock(write_lock);
+    }
+private:
+    pthread_mutex_t *write_lock;
+    pthread_mutex_t *query_lock;
+    pthread_cond_t  *qw_cond;
+    bool in_update;
+    int32_t query_count;
+};
+
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+class ConcurrentTree: public Tree<W, T, top_num, gt>, public ConcurrentQRLock{
+public:
+    explicit ConcurrentTree(std::vector<uint8_t> *vec=NULL): Tree<W, T, top_num, gt>(vec), ConcurrentQRLock(){
+    }
+    virtual ~ConcurrentTree(){
+        std::cout<<"delete concurrentTree"<<std::endl;
+    }
+    bool insert(const char * content, const W &w, const T &info, bool force=false){
+        before_collection_update();
+        try{
+            bool res = this->Tree<W, T, top_num>::insert(content, w, info, force);
+            after_collection_update();
+            return res;
+        }catch(...){
+            after_collection_update();
+            throw;
+        }
+    }
+    bool remove(const char * content){
+        before_collection_update();
+        try{
+            bool res = this->Tree<W, T, top_num>::remove(content);
+            after_collection_update();
+            return res;
+        }catch(...){
+            after_collection_update();
+            throw;
+        }
+    }
+    T * get_info(const char * content){
+        before_collection_query();
+        try{
+            T * info = this->Tree<W, T, top_num>::get_info(content);
+            after_collection_query();
+            return info;
+        }catch(...){
+            after_collection_query();
+            throw;
+        }
+    }
+    uint32_t get_suffix_count(const char * content){
+        before_collection_query();
+        try{
+            uint32_t count = this->Tree<W, T, top_num>::get_suffix_count(content);
+            after_collection_query();
+            return count;
+        }catch(...){
+            after_collection_query();
+            throw;
+        }
+    }
+    void get_suffix_info(const char * content,
+                         std::vector<PTWInfo<W, T> > &vec,
+                         const uint32_t c_limit){
+        before_collection_query();
+        try{
+            this->Tree<W, T, top_num>::get_suffix_info(content, vec, c_limit);
+            after_collection_query();
+        }catch(...){
+            after_collection_query();
+            throw;
+        }
+    }
+    void cut_max(const char * content, std::vector<PTInfo<T> > &vec){
+        before_collection_query();
+        try{
+            this->Tree<W, T, top_num>::cut_max(content, vec);
+            after_collection_query();
+        }catch(...){
+            after_collection_query();
+            throw("cut_max error");
+        }
+    }
+    void lock_query(){
+        this->ConcurrentQRLock::lock_query();
+    }
+    void unlock_query(){
+        this->ConcurrentQRLock::unlock_query();
+    }
+};
+
 class Replacer: public Tree<bool, std::string>{
 public:
     explicit Replacer(std::vector<uint8_t> *vec=NULL): Tree(vec){
     }
 
     ~Replacer(){
-        //std::cout<<"delete concurrentTree"<<std::endl;
+        std::cout<<"delete Replacer"<<std::endl;
     }
 
     bool insert(const char *key, const char *val, bool force=false){
@@ -890,9 +928,8 @@ class ConcurrentReplacer: public ConcurrentTree<bool, std::string>{
 public:
     explicit ConcurrentReplacer(std::vector<uint8_t> *vec=NULL): ConcurrentTree(vec){
     }
-
     ~ConcurrentReplacer(){
-        //std::cout<<"delete concurrentTree"<<std::endl;
+        std::cout<<"delete ConcurrentReplacer"<<std::endl;
     }
 
     bool insert(const char *key, const char *val, bool force=false){
@@ -909,23 +946,112 @@ public:
         }
         return res_str;
     }
+
+    void get_replace_info(const char * content,
+                          std::vector<std::pair<std::string, std::string> >&res_vec){
+        std::vector<PTInfo<std::string> > info_vec; info_vec.clear();
+        this->ConcurrentTree::cut_max(content, info_vec);
+
+        for(int i = 0; i < info_vec.size(); i++){
+            if(info_vec[i].info == NULL){
+                res_vec.push_back(std::make_pair(info_vec[i].word, ""));
+            }else{
+                res_vec.push_back(std::make_pair(info_vec[i].word, *info_vec[i].info));
+            }
+        }
+    }
+
 };
-template<class W>
-class Suggest: public Tree<double, W>{
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+class Suggest: public Tree<W, T, top_num, gt>{
 public:
-    explicit Suggest(std::vector<uint8_t> *vec=NULL): Tree<double, W>(vec){
+    explicit Suggest(std::vector<uint8_t> *vec=NULL): Tree<W, T, top_num, gt>(vec){
     }
     ~Suggest(){
-        //std::cout<<"delete concurrentTree"<<std::endl;
+        std::cout<<"delete Suggest"<<std::endl;
     }
 };
-template<class W>
-class ConcurrentSuggest: public ConcurrentTree<double, W>{
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+class ConcurrentSuggest: public ConcurrentTree<W, T, top_num, gt>{
 public:
-    explicit ConcurrentSuggest(std::vector<uint8_t> *vec=NULL): ConcurrentTree<double, W>(vec){
+    explicit ConcurrentSuggest(std::vector<uint8_t> *vec=NULL): ConcurrentTree<W, T, top_num, gt>(vec){
     }
     ~ConcurrentSuggest(){
-        //std::cout<<"delete concurrentTree"<<std::endl;
+        std::cout<<"delete concurrentSuggest"<<std::endl;
     }
+};
+template<class K, class V>
+class ConcurrentMap: public ConcurrentQRLock{
+public:
+    explicit ConcurrentMap(): ConcurrentQRLock(){
+    }
+    ~ConcurrentMap(){
+        std::cout<<"delete concurrentmap"<<std::endl;
+    }
+    void clear(){
+        before_collection_update();
+        try{
+            this->tmap.clear();
+            after_collection_update();
+        }catch(...){
+            after_collection_update();
+            throw;
+        }
+    }
+    void insert(const K &key, const V &val){
+        before_collection_update();
+        try{
+            this->tmap[key] = val;
+            after_collection_update();
+        }catch(...){
+            after_collection_update();
+            throw;
+        }
+    }
+    bool erase(const K &key){
+        before_collection_update();
+        try{
+            bool is_rease = false;
+            typename std::map<K, V>::iterator it = this->tmap.find(key);
+            if(it !=this->tmap.end()){
+                this->tmap.erase(key);
+                is_rease = true;
+            }
+            after_collection_update();
+            return is_rease;
+        }catch(...){
+            after_collection_update();
+            throw;
+        }
+    }
+    uint32_t _size(){
+        before_collection_query();
+        try{
+            uint32_t _size = this->tmap.size();
+            after_collection_query();
+            return _size;
+        }catch(...){
+            after_collection_query();
+            throw;
+        }
+    }
+    bool find(const K &key, V &val){
+        before_collection_query();
+        try{
+            bool is_find = false;
+            typename std::map<K, V>::iterator it = this->tmap.find(key);
+            if(it != this->tmap.end()){
+                val = it->second;
+                is_find = true;
+            }
+            after_collection_query();
+            return is_find;
+        }catch(...){
+            after_collection_query();
+            throw;
+        }
+    }
+public:
+    std::map<K, V> tmap;
 };
 #endif
