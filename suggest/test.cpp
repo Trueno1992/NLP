@@ -499,9 +499,9 @@ int main(){
     //test_strWeight_suffix();
     //while(true) test_get_suffix_info();
     //test_cut_max();
-    //test_accuracy_get_suffix_info();
+    test_accuracy_get_suffix_info();
     //test_struct_info();
-    while(true) test_concurrentTree_insert();
+    //while(true) test_concurrentTree_insert();
     //while(true)test_replace();
     //test_concurrent_replace();
     //normal_test1();

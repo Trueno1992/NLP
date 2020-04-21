@@ -85,7 +85,7 @@ public:
     virtual Son<W, T> * get_son(const uint32_t &word)=0;
     virtual Son<W, T> * set_son(const uint32_t &word, const W &w, const uint8_t &arrLen)=0;
     virtual Son<W, T> * gset_son(const uint32_t &word, const W &w, std::vector<uint8_t> &arrLen_vec)=0;
-    virtual W * get_node_max_wei()=0;
+    virtual W * get_node_max_wei(bool (*gt)(const W &, const W &))=0;
     virtual void set_wei(const W &tmp_wei){
         if(this->weight != NULL) delete this->weight;
         this->weight = new W(tmp_wei);
@@ -123,8 +123,8 @@ public:
             delete this->max_wei;
         this->max_wei = new W(wei);
     }
-    bool update_max_wei(const W &wei){
-        if(this->max_wei != NULL && wei > *this->max_wei){
+    bool update_max_wei(const W &wei, bool (*tmp_gt)(const W &, const W &)){
+        if(this->max_wei != NULL && tmp_gt(wei, *this->max_wei)){
             delete this->max_wei;
             this->max_wei = new W(wei);
             return true;
@@ -190,7 +190,7 @@ public:
     Son<W, T> * get_son(const uint32_t &word);
     Son<W, T> * set_son(const uint32_t &word, const W &w, const uint8_t &arrLen);
     Son<W, T> * gset_son(const uint32_t &word, const W &w, std::vector<uint8_t> &arrLen_vec);
-    W * get_node_max_wei();
+    W * get_node_max_wei(bool (*gt)(const W &, const W &));
 public:
     std::map<uint32_t, Son<W, T> * > *son_next_map;
     std::vector<std::pair<uint32_t, W *> > *son_top_vec;
@@ -231,7 +231,7 @@ public:
     Son<W, T> * get_son(const uint32_t &word);
     Son<W, T> * set_son(const uint32_t &word, const W &w, const uint8_t &arrLen);
     Son<W, T> * gset_son(const uint32_t &word, const W &w, std::vector<uint8_t>&arrLen_vec);
-    W * get_node_max_wei();
+    W * get_node_max_wei(bool (*gt)(const W &, const W &));
 public:
     Son<W, T> **all_son;
     uint32_t *all_word;
@@ -319,15 +319,15 @@ bool Tree<W, T, top_num, gt>::insert(const char *content, const W &weight, const
     son->node->clear_son_top_wei();
     if(gt_son_max){
         for(uint32_t i = 0; i < son_path_vec.size(); i++){
-            son_path_vec[i]->update_max_wei(weight);
+            son_path_vec[i]->update_max_wei(weight, gt);
             son_path_vec[i]->node->in_num += (son->node->is_end? 0: 1);
             son_path_vec[i]->node->clear_son_top_wei();
         }
         son->node->in_num += (son->node->is_end? 0: 1); 
     }else{
-        son->max_wei = son->node->get_node_max_wei();
+        son->max_wei = son->node->get_node_max_wei(gt);
         for(uint32_t i = son_path_vec.size() - 1; i >= 0; --i){
-            son_path_vec[i]->set_max_wei(*son_path_vec[i]->node->get_node_max_wei());
+            son_path_vec[i]->set_max_wei(*son_path_vec[i]->node->get_node_max_wei(gt));
             son_path_vec[i]->node->in_num += 0;
             son_path_vec[i]->node->clear_son_top_wei();
         }
@@ -364,7 +364,7 @@ bool Tree<W, T, top_num, gt>::remove(const char *content){
                 son_path_vec[i-1].first->node->dset_son(son_path_vec[i].second, NULL);
             }
         }else{
-            son_path_vec[i].first->set_max_wei(*son_path_vec[i].first->node->get_node_max_wei());
+            son_path_vec[i].first->set_max_wei(*son_path_vec[i].first->node->get_node_max_wei(gt));
             son_path_vec[i].first->node->clear_son_top_wei();
         }
     }
@@ -403,8 +403,8 @@ struct cmp2 {//从小到大
 };
 template<class wtype, class W, bool (*gt)(const W &, const W &)>
 bool cmp4(const std::pair<wtype, W *> &a, const std::pair<wtype, W *> &b) {
-    //return gt(*a.second, *b.second);
-    return *a.second > *b.second; // 大的在前
+    return gt(*a.second, *b.second);
+    //return *a.second > *b.second; // 大的在前
 };
 
 template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
@@ -605,7 +605,7 @@ bool NodeArr<W, T>::resize(std::vector<uint8_t> &arrLen_vec){
     return false;
 }
 template<class W, class T>
-W * NodeArr<W, T>::get_node_max_wei(){
+W * NodeArr<W, T>::get_node_max_wei(bool (*tmp_gt)(const W &, const W &)){
     if(this->in_num <= 0) throw("NodeArr<W, T>::get_node_max_wei this->in_num <=0 error");
     W * w = NULL;
 
@@ -613,7 +613,7 @@ W * NodeArr<W, T>::get_node_max_wei(){
 
     for(int32_t i = 0; i < this->son_num; i++){
         if(this->all_son[i] != NULL){
-            if(w == NULL || *this->all_son[i]->max_wei > *w){
+            if(w == NULL || tmp_gt(*this->all_son[i]->max_wei, *w)){
                 w = this->all_son[i]->max_wei;
             }
         }
@@ -695,7 +695,7 @@ Son<W, T> * NodeMap<W, T>::gset_son(const uint32_t &word, const W &w, std::vecto
     return this->set_son(word, w, arrLen_vec[0]);
 }
 template<class W, class T>
-W * NodeMap<W, T>::get_node_max_wei(){
+W * NodeMap<W, T>::get_node_max_wei(bool (*tmp_gt)(const W &, const W &)){
     if(this->in_num <= 0) throw("NodeMap<W, T>::get_node_max_wei in_num <= 0 error");
     W * w = NULL;
     if(this->is_end) w = this->weight;
@@ -703,7 +703,7 @@ W * NodeMap<W, T>::get_node_max_wei(){
     typename std::map<uint32_t, Son<W, T> * >::iterator son_it;
     for(son_it = this->son_next_map->begin(); son_it != this->son_next_map->end(); ++son_it){
         if(son_it->second == NULL) continue;
-        if(w == NULL || (*son_it->second->max_wei) > (*w)){
+        if(w == NULL || tmp_gt(*son_it->second->max_wei,  *w)){
             w = son_it->second->max_wei;
         }
     }
