@@ -11,7 +11,7 @@
 # include <stdint.h>    // uint32_t
 # include <utility>     // 包含pair
 # include <queue>
-# include <StrUtils.h>  // U32ToUtf8
+# include <StrUtils.h>  // UBase::U32ToUtf8
 # include <algorithm>
 
 
@@ -310,7 +310,7 @@ bool Tree<W, T, top_num, gt>::insert(const char *content, const W &weight, const
     Son<W, T> * son = this->root; Son<W, T> * next = NULL;
 
     std::vector<uint32_t> vec_words; vec_words.clear();
-    if(!Utf8ToU32(content, vec_words)) return false;
+    if(!UBase::Utf8ToU32(content, vec_words)) return false;
 
     std::vector<Son<W, T> *> son_path_vec; son_path_vec.clear();
     for(std::vector<uint32_t>::iterator word_it = vec_words.begin(); word_it != vec_words.end(); word_it++){ 
@@ -353,7 +353,7 @@ bool Tree<W, T, top_num, gt>::remove(const char *content){
     Son<W, T> * son = this->root; Son<W, T> * next = NULL;
 
     std::vector<uint32_t> vec_words;
-    if(!Utf8ToU32(content, vec_words)) return false;
+    if(!UBase::Utf8ToU32(content, vec_words)) return false;
 
     std::vector<std::pair<Son<W, T> *, uint32_t> > son_path_vec; son_path_vec.clear();
     son_path_vec.push_back(std::make_pair(son, 0));
@@ -395,7 +395,7 @@ Son<W, T> * Tree<W, T, top_num, gt>::get_endp(std::vector<uint32_t>:: iterator s
 template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
 Son<W, T> * Tree<W, T, top_num, gt>::get_endp(const char *content){
     std::vector<uint32_t> candidate_words;
-    if(!Utf8ToU32(content, candidate_words)) return NULL;
+    if(!UBase::Utf8ToU32(content, candidate_words)) return NULL;
     return this->get_endp(candidate_words.begin(), candidate_words.end());
 }
 template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
@@ -406,7 +406,7 @@ Son<W, T> * Tree<W, T, top_num, gt>::get_lcp_endp(std::vector<uint32_t>:: iterat
     for(std::vector<uint32_t>:: iterator it = start; it != end; it++){
         Son<W, T> * next_son = son->node->get_son(*it);
         if(next_son == NULL) break;
-        U32ToUtf8(*it, pre_str, true);
+        UBase::U32ToUtf8(*it, pre_str, true);
         son = next_son;
     }
     return son;
@@ -414,7 +414,7 @@ Son<W, T> * Tree<W, T, top_num, gt>::get_lcp_endp(std::vector<uint32_t>:: iterat
 template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
 Son<W, T> * Tree<W, T, top_num, gt>::get_lcp_endp(const char *content, std::string &pre_str){
     std::vector<uint32_t> candidate_words;
-    if(!Utf8ToU32(content, candidate_words)) return NULL;
+    if(!UBase::Utf8ToU32(content, candidate_words)) return NULL;
     return this->get_lcp_endp(candidate_words.begin(), candidate_words.end(), pre_str);
 }
 struct cmp1 {//从小到大
@@ -485,7 +485,7 @@ void Tree<W, T, top_num, gt>::get_suffix_info(Son<W, T> *son,
                 for(top_it = nodeMap->son_top_vec->begin(); top_it != nodeMap->son_top_vec->end(); top_it++){
                     if(queue.size() >= c_limit && *queue.top().first.first->max_wei >= *top_it->second) break;
                     if(result.size() >= c_limit && *result.top().first.first->node->weight >= *top_it->second) break;
-                    std::string tmp_str = node_it->first.second; U32ToUtf8(top_it->first, tmp_str, true);
+                    std::string tmp_str = node_it->first.second; UBase::U32ToUtf8(top_it->first, tmp_str, true);
                     queue.push(std::make_pair(std::make_pair((*nodeMap->son_next_map)[top_it->first], tmp_str), node_it->second + 1));
                     while(queue.size() > c_limit) queue.pop();
                     if((++j) > c_limit)throw("get_suffix_info error sort");
@@ -496,7 +496,7 @@ void Tree<W, T, top_num, gt>::get_suffix_info(Son<W, T> *son,
                     if(nodeArr->all_son[i] == NULL)continue;
                     if(queue.size() >= c_limit && *queue.top().first.first->max_wei >= *nodeArr->all_son[i]->max_wei) continue;
                     if(result.size() >= c_limit && *result.top().first.first->node->weight >= *nodeArr->all_son[i]->max_wei) continue;
-                    std::string tmp_str = node_it->first.second; U32ToUtf8(nodeArr->all_word[i], tmp_str, true);
+                    std::string tmp_str = node_it->first.second; UBase::U32ToUtf8(nodeArr->all_word[i], tmp_str, true);
                     queue.push(std::make_pair(std::make_pair(nodeArr->all_son[i], tmp_str), node_it->second + 1));
                     while(queue.size() > c_limit) queue.pop();
                 }
@@ -505,7 +505,7 @@ void Tree<W, T, top_num, gt>::get_suffix_info(Son<W, T> *son,
             while(result.size() > c_limit) result.pop();
         }
     }
-    uint32_t prefix_len = getU32len(prefix_str);
+    uint32_t prefix_len = UBase::getU32len(prefix_str);
     while(result.size() > c_limit) result.pop();
     while(result.size() != 0){
         std::pair<std::pair<Son<W, T> *, std::string>, int> tmp = result.top();
@@ -558,7 +558,7 @@ void Tree<W, T, top_num, gt>::get_prefix_info(const char * content,
                                             std::vector<PTInfo<T> > &res_list){
     if(this->root->node == NULL) return;
     std::vector<uint32_t> words_vec;
-    if(!Utf8ToU32(content, words_vec)) return;
+    if(!UBase::Utf8ToU32(content, words_vec)) return;
 
     Son<W, T> *son = this->root; std::string tmp_word = ""; uint32_t offset = 0;
     for(std::vector<uint32_t>:: iterator it = words_vec.begin(); it != words_vec.end(); it++){
@@ -584,7 +584,7 @@ bool Tree<W, T, top_num, gt>::gen_max_ptinfo(std::vector<uint32_t>::iterator beg
                                          PTInfo<T>  &ptinfo){
     if(begin == end) return false;
 
-    U32ToUtf8(*begin, ptinfo.word);
+    UBase::U32ToUtf8(*begin, ptinfo.word);
     ptinfo.info   = NULL;
     ptinfo.len    = 1;
 
@@ -595,7 +595,7 @@ bool Tree<W, T, top_num, gt>::gen_max_ptinfo(std::vector<uint32_t>::iterator beg
         if(next == NULL) break;
         len += 1; son = next;
         if(son->node->is_end){
-            U32ToUtf8(begin, it + 1, ptinfo.word);
+            UBase::U32ToUtf8(begin, it + 1, ptinfo.word);
             ptinfo.info   = son->node->info;
             ptinfo.len    = len;
         }
@@ -606,7 +606,7 @@ template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
 void Tree<W, T, top_num, gt>::cut_max(const char *content, std::vector<PTInfo<T> > &res){
 
     std::vector<uint32_t> vec_words;
-    if(!Utf8ToU32(content, vec_words)) return;
+    if(!UBase::Utf8ToU32(content, vec_words)) return;
 
     int32_t position = 0; 
     for(std::vector<uint32_t>::iterator it = vec_words.begin(); it != vec_words.end();){
@@ -984,7 +984,7 @@ public:
         this->Tree::cut_max(content, res_vec);
 
         std::string res_str = "";
-        for(int i = 0; i < res_vec.size(); i++){
+        for(uint32_t i = 0; i < res_vec.size(); i++){
             res_str += (res_vec[i].info == NULL? res_vec[i].word: (*res_vec[i].info));
         }
         return res_str;
@@ -1007,7 +1007,7 @@ public:
         this->ConcurrentTree::cut_max(content, res_vec);
 
         std::string res_str = "";
-        for(int i = 0; i < res_vec.size(); i++){
+        for(uint32_t i = 0; i < res_vec.size(); i++){
             res_str += (res_vec[i].info == NULL? res_vec[i].word: (*res_vec[i].info));
         }
         return res_str;
@@ -1018,7 +1018,7 @@ public:
         std::vector<PTInfo<std::string> > info_vec; info_vec.clear();
         this->ConcurrentTree::cut_max(content, info_vec);
 
-        for(int i = 0; i < info_vec.size(); i++){
+        for(uint32_t i = 0; i < info_vec.size(); i++){
             if(info_vec[i].info == NULL){
                 res_vec.push_back(std::make_pair(info_vec[i].word, ""));
             }else{

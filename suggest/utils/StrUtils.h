@@ -1,5 +1,5 @@
-#ifndef __nlp_StrUtils__H_
-#define __nlp_StrUtils__H_
+#ifndef __wlz_StrUtils__H_
+#define __wlz_StrUtils__H_
 
 #include <vector>
 #include <string>
@@ -7,26 +7,26 @@
 # include<iostream>
 
 
-bool Utf8ToU32(const std::string &content, std::vector<uint32_t> & vec, bool append=false);
+namespace UBase{
 
-void U32ToUtf8(const uint32_t &ui, std::string &res, bool append=false);
+	bool Utf8ToU32(const std::string &content, std::vector<uint32_t> & vec, bool append=false);
 
-void U32ToUtf8(std::vector<uint32_t>::iterator begin,
-               std::vector<uint32_t>::iterator end,
-               std::string & content,
-               bool append=false);
+	void U32ToUtf8(const uint32_t &ui, std::string &res, bool append=false);
 
-void PrintUnicode(const uint32_t &ui);
+	void U32ToUtf8(std::vector<uint32_t>::iterator begin,
+				   std::vector<uint32_t>::iterator end,
+				   std::string & content,
+				   bool append=false);
 
-uint32_t getU32len(const char *content);
+	void PrintUnicode(const uint32_t &ui);
 
-void PrintUString(const std::vector<uint32_t> &vec);
+	uint32_t getU32len(const char *content);
 
-char * get_random_str(int);
+	void PrintUString(const std::vector<uint32_t> &vec);
 
-std::string toString(int i);
+	char * get_random_str(int);
 
-std::string getTodayDate(int add_days=0, std::string format="%Y-%m-%d %H:%M:%S");
+	std::string toString(int i);
 
-uint64_t get_micron_second();
+};
 #endif
