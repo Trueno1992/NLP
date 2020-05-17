@@ -1,5 +1,5 @@
-#ifndef __lzhouwu_TreeBase_H_
-#define __lzhouwu_TreeBase_H_
+#ifndef __lzhouwu_TreeBase_HPP__
+#define __lzhouwu_TreeBase_HPP__
 
 # include <map>
 # include <vector>
@@ -15,7 +15,8 @@
 # include <algorithm>
 
 
-template<class W> bool a_gt_b(const W &a, const W &b){
+template<class W>
+bool a_gt_b(const W &a, const W &b){
     if(a > b) return true;
     return false;
 }
@@ -23,8 +24,8 @@ template<class W> bool a_gt_b(const W &a, const W &b){
 class ConcurrentQRLock;
 template<class T> struct PTInfo;
 template<class W, class T> struct PTWInfo;
-template<class W, class T> class Node;
 template<class W, class T> class Son;
+template<class W, class T> class Node;
 template<class W, class T> class NodeArr;
 template<class W, class T> class NodeMap;
 template<class W, class T, uint64_t top_num=UINT64_MAX, bool (*gt)(const W &, const W &)=a_gt_b> class Tree;
@@ -272,7 +273,9 @@ public:
     T * get_info(const char *);
     uint32_t get_suffix_count(const char *);
     void cut_max(const char *, std::vector<PTInfo<T> > &);
+    void get_prefix_info(const char *, std::vector<PTInfo<T> > &);
     void get_suffix_info(const char *, std::vector<PTWInfo<W, T> > &, const uint32_t);
+    std::string get_lcp_suffix_info(const char *, std::vector<PTWInfo<W, T> > &, const uint32_t);
     virtual void lock_query(){};
     virtual void unlock_query(){};
     //friend NodeMap<W, T> * arr2map(NodeArr<W, T> *);
@@ -283,7 +286,15 @@ public:
                         std::vector<uint32_t>::iterator end,
                         PTInfo<T> &ptinfo);
     Son<W, T> * get_endp(const char *content);
-    Son<W, T> * get_endp(std::vector<uint32_t>::iterator begin, std::vector<uint32_t>::iterator end);
+    Son<W, T> * get_endp(std::vector<uint32_t>::iterator begin,
+                         std::vector<uint32_t>::iterator end);
+
+    Son<W, T> * get_lcp_endp(const char *content,
+                             std::string &pre_str);
+    Son<W, T> * get_lcp_endp(std::vector<uint32_t>::iterator begin,
+                             std::vector<uint32_t>::iterator end,
+                             std::string &pre_str);
+
     void get_suffix_info(Son<W, T> *, const char *, std::vector<PTWInfo<W, T> > &, const uint32_t);
 //private:
 public:
@@ -387,6 +398,25 @@ Son<W, T> * Tree<W, T, top_num, gt>::get_endp(const char *content){
     if(!Utf8ToU32(content, candidate_words)) return NULL;
     return this->get_endp(candidate_words.begin(), candidate_words.end());
 }
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+Son<W, T> * Tree<W, T, top_num, gt>::get_lcp_endp(std::vector<uint32_t>:: iterator start,
+                                                  std::vector<uint32_t>:: iterator end,
+                                                  std::string &pre_str){
+    Son<W, T> *son = this->root;
+    for(std::vector<uint32_t>:: iterator it = start; it != end; it++){
+        Son<W, T> * next_son = son->node->get_son(*it);
+        if(next_son == NULL) break;
+        U32ToUtf8(*it, pre_str, true);
+        son = next_son;
+    }
+    return son;
+}
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+Son<W, T> * Tree<W, T, top_num, gt>::get_lcp_endp(const char *content, std::string &pre_str){
+    std::vector<uint32_t> candidate_words;
+    if(!Utf8ToU32(content, candidate_words)) return NULL;
+    return this->get_lcp_endp(candidate_words.begin(), candidate_words.end(), pre_str);
+}
 struct cmp1 {//从小到大
     template <typename T, typename U>
     bool operator()(T const &left, U const &right) {
@@ -453,8 +483,8 @@ void Tree<W, T, top_num, gt>::get_suffix_info(Son<W, T> *son,
                 this->unlock_query();
                 int j = 0;
                 for(top_it = nodeMap->son_top_vec->begin(); top_it != nodeMap->son_top_vec->end(); top_it++){
-                    if(queue.size() >= c_limit && *queue.top().first.first->max_wei > *top_it->second) break;
-                    if(result.size() >= c_limit && *result.top().first.first->node->weight > *top_it->second) break;
+                    if(queue.size() >= c_limit && *queue.top().first.first->max_wei >= *top_it->second) break;
+                    if(result.size() >= c_limit && *result.top().first.first->node->weight >= *top_it->second) break;
                     std::string tmp_str = node_it->first.second; U32ToUtf8(top_it->first, tmp_str, true);
                     queue.push(std::make_pair(std::make_pair((*nodeMap->son_next_map)[top_it->first], tmp_str), node_it->second + 1));
                     while(queue.size() > c_limit) queue.pop();
@@ -491,12 +521,23 @@ void Tree<W, T, top_num, gt>::get_suffix_info(Son<W, T> *son,
 }
 template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
 void Tree<W, T, top_num, gt>::get_suffix_info(const char * content,
-                                          std::vector<PTWInfo<W, T> > &res_list,
-                                          const uint32_t c_limit){
+                                              std::vector<PTWInfo<W, T> > &res_list,
+                                              const uint32_t c_limit){
     if(this->root->node == NULL) return;
     Son<W, T> *son = this->get_endp(content);
     if(son == NULL) return;
     this->get_suffix_info(son, content, res_list, c_limit);
+}
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+std::string Tree<W, T, top_num, gt>::get_lcp_suffix_info(const char * content,
+                                                         std::vector<PTWInfo<W, T> > &res_list,
+                                                         const uint32_t c_limit){
+    if(this->root->node == NULL) return "";
+    std::string pre_str = "";
+    Son<W, T> *son = this->get_lcp_endp(content, pre_str);
+    if(son == NULL) return "";
+    this->get_suffix_info(son, pre_str.c_str(), res_list, c_limit);
+    return pre_str;
 }
 template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
 uint32_t Tree<W, T, top_num, gt>::get_suffix_count(const char *content){
@@ -512,6 +553,31 @@ T * Tree<W, T, top_num, gt>::get_info(const char *content){
     if(son == NULL) return NULL;
     return son->node->info;
 }
+template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
+void Tree<W, T, top_num, gt>::get_prefix_info(const char * content,
+                                            std::vector<PTInfo<T> > &res_list){
+    if(this->root->node == NULL) return;
+    std::vector<uint32_t> words_vec;
+    if(!Utf8ToU32(content, words_vec)) return;
+
+    Son<W, T> *son = this->root; std::string tmp_word = ""; uint32_t offset = 0;
+    for(std::vector<uint32_t>:: iterator it = words_vec.begin(); it != words_vec.end(); it++){
+        if(son->node->is_end){
+            PTInfo<T> rInfo;
+            rInfo.word   = tmp_word;
+            rInfo.len    = offset + 1;
+            rInfo.offset = offset;
+            rInfo.info   = son->node->info;
+            res_list.push_back(rInfo);
+        }
+        Son<W, T> * next_son = son->node->get_son(*it);
+        if(next_son == NULL) return;
+        son = next_son;
+        offset += 1;
+        tmp_word += *it;
+    }
+}
+
 template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
 bool Tree<W, T, top_num, gt>::gen_max_ptinfo(std::vector<uint32_t>::iterator begin,
                                          std::vector<uint32_t>::iterator end,
@@ -960,7 +1026,6 @@ public:
             }
         }
     }
-
 };
 template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
 class Suggest: public Tree<W, T, top_num, gt>{
@@ -1024,7 +1089,7 @@ public:
             throw;
         }
     }
-    uint32_t _size(){
+    uint32_t size(){
         before_collection_query();
         try{
             uint32_t _size = this->tmap.size();

@@ -172,7 +172,7 @@ void test_accuracy_get_suffix_info(){
     tree->remove("180");
     cout<<"res_size="<<tree->get_suffix_count("11")<<endl<<endl;
     std::vector<PTWInfo<int, string> > res_vec;
-    tree->get_suffix_info("1", res_vec, 3);
+    tree->get_lcp_suffix_info("1", res_vec, 3);
     for(uint32_t i=0; i <res_vec.size(); i++){
         cout<<"word="<<res_vec[i].word<<endl;
         cout<<"weight="<<*res_vec[i].weight<<endl;
@@ -490,6 +490,51 @@ void normal_test1(){
     }
 }
 
+void test_strWeight_lcp_suffix(){
+    Tree<string, string> *tree = new Tree<string, string>();
+    tree->insert("110", "11", "name0"); 
+    tree->insert("111", "22", "name1"); 
+    tree->insert("112", "33", "name2"); 
+    tree->insert("113", "44", "name3"); 
+    tree->insert("114", "55", "name4"); 
+    tree->insert("115", "66", "name5"); 
+    tree->insert("116", "77", "name6"); 
+    tree->insert("118", "70", "name8"); 
+    tree->remove("116");
+    std::vector<PTWInfo<string, string> > res_vec;
+    cout<<tree->get_lcp_suffix_info("145", res_vec, 3)<<endl;
+    for(uint32_t i=0; i <res_vec.size(); i++){
+        cout<< res_vec[i].word<<endl;
+        cout<<*res_vec[i].weight<<endl;
+        cout<<*res_vec[i].info<<endl;
+        cout<<endl;
+    }
+    delete tree;
+}
+
+void test_getPrefix(){
+    Tree<string, string> *tree = new Tree<string, string>();
+    tree->insert("",    "0",  "name"); 
+    tree->insert("1",   "00", "namea"); 
+    tree->insert("11",  "01", "nameb"); 
+    tree->insert("110", "11", "name0"); 
+    tree->insert("111", "22", "name1"); 
+    tree->insert("112", "33", "name2"); 
+    tree->insert("113", "44", "name3"); 
+    tree->insert("114", "55", "name4"); 
+    tree->insert("115", "66", "name5"); 
+    tree->insert("116", "77", "name6"); 
+    tree->insert("118", "70", "name8"); 
+    tree->remove("116");
+    std::vector<PTInfo<string> > res_vec;
+    tree->get_prefix_info("118890", res_vec);
+    for(uint32_t i=0; i <res_vec.size(); i++){
+        cout<< res_vec[i].word<<endl;
+        cout<<*res_vec[i].info<<endl;
+        cout<<endl;
+    }
+    delete tree;
+}
 
 //g++ -lpthread test.cpp tree.h utils/StrUtils.o -o a.out -I./ -I./utils/
 //ps -ef |grep a.out|grep -v grep|awk -F ' ' '{print $2}'|xargs htop -p
@@ -499,12 +544,14 @@ int main(){
     //test_strWeight_suffix();
     //while(true) test_get_suffix_info();
     //test_cut_max();
-    test_accuracy_get_suffix_info();
+    //test_accuracy_get_suffix_info();
     //test_struct_info();
     //while(true) test_concurrentTree_insert();
     //while(true)test_replace();
     //test_concurrent_replace();
     //normal_test1();
     //test_concurrent_map();
+    //while(true)test_strWeight_lcp_suffix();
+    test_getPrefix();
     return 0;
 }
