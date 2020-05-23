@@ -1,13 +1,14 @@
 #ifndef __wlz_StrUtils__H_
 #define __wlz_StrUtils__H_
 
-#include <vector>
-#include <string>
+# include <vector>
+# include <string>
 # include<stdint.h>
 # include<iostream>
 
-
 namespace UBase{
+
+namespace Utils{
 
 	bool Utf8ToU32(const std::string &content, std::vector<uint32_t> & vec, bool append=false);
 
@@ -28,5 +29,7 @@ namespace UBase{
 
 	std::string toString(int i);
 
-};
+}
+
+}
 #endif

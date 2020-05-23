@@ -6,6 +6,8 @@
 
 namespace UBase{
 
+namespace Utils{
+
 bool Utf8ToU32(const std::string& str, std::vector<uint32_t>& vec, bool append) {
   uint32_t tmp;
   if(!append)vec.clear();
@@ -122,6 +124,8 @@ std::string toString(int i){
     std::stringstream ss; ss<<i; 
     std::string str = ss.str();
     return str;
+}
+
 }
 
 };

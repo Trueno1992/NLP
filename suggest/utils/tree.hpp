@@ -1,12 +1,10 @@
-#ifndef __lzhouwu_TreeBase_HPP__
-#define __lzhouwu_TreeBase_HPP__
+#ifndef __wlz_TreeBase_HPP__
+#define __wlz_TreeBase_HPP__
 
 # include <map>
 # include <vector>
 # include <stdio.h>
 # include <iostream>
-# include <pthread.h>
-# include <unistd.h>    // sleep
 # include <string.h>
 # include <stdint.h>    // uint32_t
 # include <utility>     // 包含pair
@@ -14,28 +12,23 @@
 # include <StrUtils.h>  // UBase::U32ToUtf8
 # include <algorithm>
 
+namespace UBase{
+
+namespace Struct{
 
 template<class W>
-bool a_gt_b(const W &a, const W &b){
+bool is_greater(const W &a, const W &b){
     if(a > b) return true;
     return false;
 }
 
-class ConcurrentQRLock;
 template<class T> struct PTInfo;
 template<class W, class T> struct PTWInfo;
 template<class W, class T> class Son;
 template<class W, class T> class Node;
 template<class W, class T> class NodeArr;
 template<class W, class T> class NodeMap;
-template<class W, class T, uint64_t top_num=UINT64_MAX, bool (*gt)(const W &, const W &)=a_gt_b> class Tree;
-template<class W, class T, uint64_t top_num=UINT64_MAX, bool (*gt)(const W &, const W &)=a_gt_b> class ConcurrentTree;
-template<class W, class T, uint64_t top_num=UINT64_MAX, bool (*gt)(const W &, const W &)=a_gt_b> class Suggest;
-template<class W, class T, uint64_t top_num=UINT64_MAX, bool (*gt)(const W &, const W &)=a_gt_b> class ConcurrentSuggest;
-class Replacer;
-class ConcurrentReplacer;
-template<class K, class V> class ConcurrentMap;
-
+template<class W, class T, uint64_t top_num=UINT64_MAX, bool (*gt)(const W &, const W &)=is_greater<W> > class Tree;
 template<class W, class T> NodeMap<W, T> * arr2map(NodeArr<W, T> *arrNode);
 
 
@@ -324,7 +317,7 @@ bool Tree<W, T, top_num, gt>::insert(const char *content, const W &weight, const
         son = next;
     }
     if(son->node->is_end && !force)return false;
-    bool gt_son_max = (!son->node->is_end || weight >= (*son->node->weight));
+    bool gt_son_max = (!son->node->is_end || weight == (*son->node->weight) || gt(weight, *son->node->weight));
     son->node->set_wei(weight);
     son->node->set_info(info);
     son->node->clear_son_top_wei();
@@ -634,8 +627,6 @@ NodeMap<W, T> * arr2map(NodeArr<W, T> *arrNode){
 }
 
 
-
-
 template<class W, class T>
 void NodeArr<W, T>::resize(const uint8_t &new_son_num){
     Son<W, T> **new_all_son = new Son<W, T>*[new_son_num];
@@ -777,346 +768,7 @@ W * NodeMap<W, T>::get_node_max_wei(bool (*tmp_gt)(const W &, const W &)){
     return w;
 }
 
+}  // end namespace Struct
 
-/*--------------------------------------------------------------------------------------------------------*/
-class ConcurrentQRLock{
-public:
-    explicit ConcurrentQRLock(){
-        this->write_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-        this->query_lock = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-        this->qw_cond    = (pthread_cond_t  *)malloc(sizeof(pthread_cond_t)); 
-
-        pthread_mutex_init(this->query_lock, NULL);
-        pthread_mutex_init(this->write_lock, NULL);
-        pthread_cond_init(this->qw_cond, NULL);
-
-        this->query_count = 0;
-        this->in_update = false;
-    }
-    virtual ~ConcurrentQRLock(){
-        std::cout<<"delete ConcurrentQRLock"<<std::endl;
-        /*没有意义
-        while(this->query_count > 0 || this->in_update){
-            sleep(1);
-            std::cout<<"waiting for (this->query_count == 0 && !this->in_update())"<<std::endl;
-        }
-        */
-
-        // 如果没有join等待线程执行完，则以下的释放会造成内存泄漏
-        while(pthread_mutex_destroy(this->write_lock) != 0){
-            std::cout<<"waiting for pthread_mutex_destroy(this->write_lock)"<<std::endl;
-            sleep(1);
-        }
-        while(pthread_mutex_destroy(this->query_lock) != 0){
-            std::cout<<"waiting for pthread_mutex_destroy(this->query_lock)"<<std::endl;
-            sleep(1);
-        }
-        while(pthread_cond_destroy(this->qw_cond) != 0){
-            std::cout<<"waiting for pthread_cond_destroy(this->qw_cond)"<<std::endl;
-            sleep(1);
-        }
-        free(this->write_lock);
-        free(this->query_lock);
-        free(this->qw_cond);
-    }
-public:
-    void before_collection_update(){
-        pthread_mutex_lock(write_lock);
-        in_update = true;
-        pthread_mutex_lock(query_lock);
-        while(query_count > 0){
-            pthread_cond_wait(qw_cond, query_lock);
-        }
-    }
-    void after_collection_update(){
-        in_update = false;
-        pthread_mutex_unlock(query_lock);
-        pthread_mutex_unlock(write_lock);
-        pthread_cond_broadcast(qw_cond);
-    }
-
-    void before_collection_query(){
-        pthread_mutex_lock(query_lock);
-        while(in_update){
-            pthread_cond_wait(qw_cond, query_lock);
-        }
-        query_count += 1;
-        pthread_mutex_unlock(query_lock);
-    }
-    void after_collection_query(){
-        pthread_mutex_lock(query_lock);
-        query_count -= 1;
-        if(query_count == 0){
-            pthread_mutex_unlock(query_lock);
-            pthread_cond_broadcast(qw_cond);
-        }else{
-            pthread_mutex_unlock(query_lock);
-        }
-    }
-    uint32_t get_query_count(){
-        return query_count;
-    }
-    bool get_in_update(){
-        return in_update;
-    }
-
-    void lock_query(){
-        pthread_mutex_lock(query_lock);
-        this->query_count += 1;
-    }
-    void unlock_query(){
-        this->query_count -= 1;
-        pthread_mutex_unlock(query_lock);
-    }
-    void lock_write(){
-        pthread_mutex_lock(write_lock);
-        this->in_update = true;
-    }
-    void unlock_write(){
-        this->in_update = false;
-        pthread_mutex_unlock(write_lock);
-    }
-private:
-    pthread_mutex_t *write_lock;
-    pthread_mutex_t *query_lock;
-    pthread_cond_t  *qw_cond;
-    bool in_update;
-    int32_t query_count;
-};
-
-template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
-class ConcurrentTree: public Tree<W, T, top_num, gt>, public ConcurrentQRLock{
-public:
-    explicit ConcurrentTree(std::vector<uint8_t> *vec=NULL): Tree<W, T, top_num, gt>(vec), ConcurrentQRLock(){
-    }
-    virtual ~ConcurrentTree(){
-        std::cout<<"delete concurrentTree"<<std::endl;
-    }
-    bool insert(const char * content, const W &w, const T &info, bool force=false){
-        before_collection_update();
-        try{
-            bool res = this->Tree<W, T, top_num>::insert(content, w, info, force);
-            after_collection_update();
-            return res;
-        }catch(...){
-            after_collection_update();
-            throw;
-        }
-    }
-    bool remove(const char * content){
-        before_collection_update();
-        try{
-            bool res = this->Tree<W, T, top_num>::remove(content);
-            after_collection_update();
-            return res;
-        }catch(...){
-            after_collection_update();
-            throw;
-        }
-    }
-    T * get_info(const char * content){
-        before_collection_query();
-        try{
-            T * info = this->Tree<W, T, top_num>::get_info(content);
-            after_collection_query();
-            return info;
-        }catch(...){
-            after_collection_query();
-            throw;
-        }
-    }
-    uint32_t get_suffix_count(const char * content){
-        before_collection_query();
-        try{
-            uint32_t count = this->Tree<W, T, top_num>::get_suffix_count(content);
-            after_collection_query();
-            return count;
-        }catch(...){
-            after_collection_query();
-            throw;
-        }
-    }
-    void get_suffix_info(const char * content,
-                         std::vector<PTWInfo<W, T> > &vec,
-                         const uint32_t c_limit){
-        before_collection_query();
-        try{
-            this->Tree<W, T, top_num>::get_suffix_info(content, vec, c_limit);
-            after_collection_query();
-        }catch(...){
-            after_collection_query();
-            throw;
-        }
-    }
-    void cut_max(const char * content, std::vector<PTInfo<T> > &vec){
-        before_collection_query();
-        try{
-            this->Tree<W, T, top_num>::cut_max(content, vec);
-            after_collection_query();
-        }catch(...){
-            after_collection_query();
-            throw("cut_max error");
-        }
-    }
-    void lock_query(){
-        this->ConcurrentQRLock::lock_query();
-    }
-    void unlock_query(){
-        this->ConcurrentQRLock::unlock_query();
-    }
-};
-
-class Replacer: public Tree<bool, std::string>{
-public:
-    explicit Replacer(std::vector<uint8_t> *vec=NULL): Tree(vec){
-    }
-
-    ~Replacer(){
-        std::cout<<"delete Replacer"<<std::endl;
-    }
-
-    bool insert(const char *key, const char *val, bool force=false){
-        return this->Tree::insert(key, false, val, force);
-    }
-
-    std::string replace(const char * content){
-        std::vector<PTInfo<std::string> > res_vec; res_vec.clear();
-        this->Tree::cut_max(content, res_vec);
-
-        std::string res_str = "";
-        for(uint32_t i = 0; i < res_vec.size(); i++){
-            res_str += (res_vec[i].info == NULL? res_vec[i].word: (*res_vec[i].info));
-        }
-        return res_str;
-    }
-};
-class ConcurrentReplacer: public ConcurrentTree<bool, std::string>{
-public:
-    explicit ConcurrentReplacer(std::vector<uint8_t> *vec=NULL): ConcurrentTree(vec){
-    }
-    ~ConcurrentReplacer(){
-        std::cout<<"delete ConcurrentReplacer"<<std::endl;
-    }
-
-    bool insert(const char *key, const char *val, bool force=false){
-        return this->ConcurrentTree::insert(key, false, val, force);
-    }
-
-    std::string replace(const char * content){
-        std::vector<PTInfo<std::string> > res_vec; res_vec.clear();
-        this->ConcurrentTree::cut_max(content, res_vec);
-
-        std::string res_str = "";
-        for(uint32_t i = 0; i < res_vec.size(); i++){
-            res_str += (res_vec[i].info == NULL? res_vec[i].word: (*res_vec[i].info));
-        }
-        return res_str;
-    }
-
-    void get_replace_info(const char * content,
-                          std::vector<std::pair<std::string, std::string> >&res_vec){
-        std::vector<PTInfo<std::string> > info_vec; info_vec.clear();
-        this->ConcurrentTree::cut_max(content, info_vec);
-
-        for(uint32_t i = 0; i < info_vec.size(); i++){
-            if(info_vec[i].info == NULL){
-                res_vec.push_back(std::make_pair(info_vec[i].word, ""));
-            }else{
-                res_vec.push_back(std::make_pair(info_vec[i].word, *info_vec[i].info));
-            }
-        }
-    }
-};
-template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
-class Suggest: public Tree<W, T, top_num, gt>{
-public:
-    explicit Suggest(std::vector<uint8_t> *vec=NULL): Tree<W, T, top_num, gt>(vec){
-    }
-    ~Suggest(){
-        std::cout<<"delete Suggest"<<std::endl;
-    }
-};
-template<class W, class T, uint64_t top_num, bool (*gt)(const W &, const W &)>
-class ConcurrentSuggest: public ConcurrentTree<W, T, top_num, gt>{
-public:
-    explicit ConcurrentSuggest(std::vector<uint8_t> *vec=NULL): ConcurrentTree<W, T, top_num, gt>(vec){
-    }
-    ~ConcurrentSuggest(){
-        std::cout<<"delete concurrentSuggest"<<std::endl;
-    }
-};
-template<class K, class V>
-class ConcurrentMap: public ConcurrentQRLock{
-public:
-    explicit ConcurrentMap(): ConcurrentQRLock(){
-    }
-    ~ConcurrentMap(){
-        std::cout<<"delete concurrentmap"<<std::endl;
-    }
-    void clear(){
-        before_collection_update();
-        try{
-            this->tmap.clear();
-            after_collection_update();
-        }catch(...){
-            after_collection_update();
-            throw;
-        }
-    }
-    void insert(const K &key, const V &val){
-        before_collection_update();
-        try{
-            this->tmap[key] = val;
-            after_collection_update();
-        }catch(...){
-            after_collection_update();
-            throw;
-        }
-    }
-    bool erase(const K &key){
-        before_collection_update();
-        try{
-            bool is_rease = false;
-            typename std::map<K, V>::iterator it = this->tmap.find(key);
-            if(it !=this->tmap.end()){
-                this->tmap.erase(key);
-                is_rease = true;
-            }
-            after_collection_update();
-            return is_rease;
-        }catch(...){
-            after_collection_update();
-            throw;
-        }
-    }
-    uint32_t size(){
-        before_collection_query();
-        try{
-            uint32_t _size = this->tmap.size();
-            after_collection_query();
-            return _size;
-        }catch(...){
-            after_collection_query();
-            throw;
-        }
-    }
-    bool find(const K &key, V &val){
-        before_collection_query();
-        try{
-            bool is_find = false;
-            typename std::map<K, V>::iterator it = this->tmap.find(key);
-            if(it != this->tmap.end()){
-                val = it->second;
-                is_find = true;
-            }
-            after_collection_query();
-            return is_find;
-        }catch(...){
-            after_collection_query();
-            throw;
-        }
-    }
-public:
-    std::map<K, V> tmap;
-};
+}  // end namespace UBase
 #endif

@@ -3,6 +3,8 @@
 #include "sys/time.h"
 
 namespace UBase{
+
+namespace Utils{
 /*
 */
 	std::string getTodayDate(int add_days, std::string format){ 
@@ -21,4 +23,6 @@ namespace UBase{
 		return tv.tv_sec*1000000 +tv.tv_usec;
 	}
 
-};
+}
+
+}

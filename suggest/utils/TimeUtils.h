@@ -7,10 +7,12 @@
 
 namespace UBase{
 
+namespace Utils{
+
 	std::string getTodayDate(int add_days=0, std::string format="%Y-%m-%d %H:%M:%S");
 
 	uint64_t get_micron_second();
+}
 
 };
-
 #endif
