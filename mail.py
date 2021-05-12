@@ -11,10 +11,7 @@ from email.mime.application import MIMEApplication
 
 
 sender = 'trueno_wlz@sina.com'
-passwd = 'www13787196448'
-
-sender = 'wulangzhou@yuewen.com'
-passwd = 'MorePwd@159'
+passwd = 'www13787196449'
 
 
 def send_mail(subject, content, receivers, cc_receivers=None, is_content_html=False, file_path=None, plugins=None):
