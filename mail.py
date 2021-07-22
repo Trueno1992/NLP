@@ -58,7 +58,7 @@ def send_mail(subject, content, receivers, cc_receivers=None, is_content_html=Fa
 if __name__ == '__main__':
     send_mail('python 邮件测试',
               '<p color=red>内容是乱起八糟啦</p>',
-              ['wulangzhou@yuewen.com'],
+              [''],
               file_path='./utils.py',
               cc_receivers=['1207175256@qq.com'],
               is_content_html=True)
